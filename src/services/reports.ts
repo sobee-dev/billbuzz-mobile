@@ -1,14 +1,18 @@
 import api from '../lib/axios';
 
+export interface MonthlyRevenuePoint {
+  month:   string;
+  value:   number | string;
+  current: boolean;
+}
+
 export interface ReportsDashboard {
-  monthlyRevenue:   { month: string; value: number; current?: boolean }[];
-  topProducts?:     { name: string; revenue: number; qty: number }[];
-  topClients?:      { name: string; revenue: number; invoices: number }[];
-  revenueTotal:     number;
-  revenueGrowth:    string; // e.g. "+14%"
-  avgInvoiceValue:  number;
+  monthlyRevenue:   MonthlyRevenuePoint[];
+  revenueTotal:     number | string;
+  revenueGrowth:    string;
+  avgInvoiceValue:  number | string;
   collectionRate:   string;
-  outstandingTotal: number;
+  outstandingTotal: number | string;
 }
 
 export const reportService = {

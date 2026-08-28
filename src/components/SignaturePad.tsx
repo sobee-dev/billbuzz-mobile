@@ -1,105 +1,142 @@
 import { useRef, useState } from 'react';
-import { ActivityIndicator, PanResponder, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-import { captureRef } from 'react-native-view-shot';
+import { ActivityIndicator, Platform, Text, TouchableOpacity, View } from 'react-native';
+import Signature from 'react-native-signature-canvas';
 import { colors } from '../styles/globals';
-
 /**
- * Freehand signature pad. Touches are captured with PanResponder and
- * rendered as SVG strokes purely as local component state — nothing is
- * uploaded while drawing. Only when "Save Signature" is tapped does the
- * pad rasterize itself to a temp PNG file and call onSave, exactly once.
+ * Freehand signature pad, built on react-native-signature-canvas instead
+ * of a hand-rolled PanResponder + SVG implementation. That library wraps
+ * the well-established signature_pad.js and is maintained specifically to
+ * behave the same on iOS, Android, and web — which is exactly the part we
+ * kept losing to platform differences when building it ourselves. There's
+ * no Platform.OS branching left in this file; the library owns that.
  *
- * This is deliberate: an earlier version called onSave (then named
- * onDrawEnd) after every single stroke, which meant a multi-stroke
- * signature triggered one Cloudinary upload per stroke — wasteful even
- * with unsigned uploads, and outright costly with signed ones, since each
- * upload also round-trips to our own signature-issuing endpoint first.
- * Explicit Clear/Save keeps this to exactly one upload per signature.
+ * onSave receives a "data:image/png;base64,..." string, not a file path —
+ * the caller decides what to do with it (see handleSignatureCapture in the
+ * screens that use this: native writes it to a temp file first since
+ * uploadToCloudinary's native path expects a real file:// uri; web can
+ * pass the data uri straight through).
  */
-export function SignaturePad({ onSave }: { onSave: (fileUri: string) => void }) {
-  const [strokes, setStrokes] = useState<string[]>([]);
-  const [activePath, setActivePath] = useState('');
-  const [saving, setSaving] = useState(false);
-  const activePathRef = useRef('');
-  const padRef = useRef<View>(null);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => {
-        const { locationX, locationY } = e.nativeEvent;
-        activePathRef.current = `M${locationX.toFixed(1)},${locationY.toFixed(1)}`;
-        setActivePath(activePathRef.current);
-      },
-      onPanResponderMove: (e) => {
-        const { locationX, locationY } = e.nativeEvent;
-        activePathRef.current += ` L${locationX.toFixed(1)},${locationY.toFixed(1)}`;
-        setActivePath(activePathRef.current);
-      },
-      onPanResponderRelease: () => {
-        if (!activePathRef.current) return;
-        setStrokes(prev => [...prev, activePathRef.current]);
-        activePathRef.current = '';
-        setActivePath('');
-      },
-    })
-  ).current;
+let WebSignaturePad: any = null;
+if (Platform.OS === 'web') {
+  WebSignaturePad = require('react-signature-canvas').default;
+}
+
+export function SignaturePad({ onSave }: { onSave: (base64Png: string) => void }) {
+  const webRef = useRef<any>(null);
+  const ref = useRef<any>(null);
+  const [saving, setSaving] = useState(false);
+
+  function handleOK(base64Png: string) {
+    setSaving(false);
+    onSave(base64Png);
+  }
+
+  function handleEmpty() {
+    // Save was tapped with nothing drawn — just reset, nothing to upload.
+    setSaving(false);
+  }
+
+  function handleSave() {
+    if (saving) return;
+    setSaving(true);
+    // Resolves to handleOK (has a drawing) or handleEmpty (blank pad).
+    ref.current?.readSignature();
+  }
 
   function handleClear() {
-    setStrokes([]);
-    setActivePath('');
-    activePathRef.current = '';
+    ref.current?.clearSignature();
   }
 
-  async function handleSave() {
-    if (strokes.length === 0 || saving) return;
-    setSaving(true);
-    try {
-      const uri = await captureRef(padRef, { format: 'png', quality: 1, result: 'tmpfile' });
-      onSave(uri);
-    } catch {
-      // Parent surfaces an error if the resulting upload fails; a capture
-      // failure here just means Save didn't produce anything to hand off.
-    } finally {
+  if (Platform.OS === 'web') {
+    function handleWebSave() {
+      if (saving || webRef.current?.isEmpty()) return;
+      setSaving(true);
+      const dataUrl = webRef.current.getTrimmedCanvas().toDataURL('image/png');
       setSaving(false);
+      onSave(dataUrl);
     }
-  }
 
-  const hasDrawing = strokes.length > 0;
+    return (
+      <View>
+        <View style={{
+          height: 160, borderRadius: 12, borderWidth: 1.2,
+          borderColor: '#d5d8e2', backgroundColor: colors.white, overflow: 'hidden',
+        }}>
+          <WebSignaturePad ref={webRef} penColor="#0000FF" canvasProps={{ style: { width: '100%', height: '100%' } }} />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+          <TouchableOpacity
+            onPress={() => webRef.current?.clear()}
+            disabled={saving}
+            activeOpacity={0.8}
+            style={{
+              flex: 1, borderRadius: 10, paddingVertical: 12,
+              borderWidth: 1.2, borderColor: '#d5d8e2',
+              alignItems: 'center', backgroundColor: colors.white,
+            }}
+          >
+            <Text style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: '700', color: colors.onSurfaceVariant }}>
+              Clear
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleWebSave}
+            disabled={saving}
+            activeOpacity={0.8}
+            style={{
+              flex: 1, borderRadius: 10, paddingVertical: 12,
+              backgroundColor: colors.primaryContainer,
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            {saving ? (
+              <ActivityIndicator color={colors.white} size="small" />
+            ) : (
+              <Text style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: '700', color: colors.white }}>
+                Save Signature
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View>
-      <View
-        ref={padRef}
-        collapsable={false}
-        {...panResponder.panHandlers}
-        style={{
-          height: 160, borderRadius: 12, borderWidth: 1.2,
-          borderColor: '#d5d8e2', backgroundColor: colors.white, overflow: 'hidden',
-        }}
-      >
-        <Svg width="100%" height="100%">
-          {strokes.map((d, i) => (
-            <Path key={i} d={d} stroke={colors.onSurface} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          ))}
-          {activePath !== '' && (
-            <Path d={activePath} stroke={colors.onSurface} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          )}
-        </Svg>
+      <View style={{
+        height: 160, borderRadius: 12, borderWidth: 1.2,
+        borderColor: '#d5d8e2', backgroundColor: colors.white, overflow: 'hidden',
+      }}>
+        <Signature
+          ref={ref}
+          onOK={handleOK}
+          onEmpty={handleEmpty}
+          backgroundColor="transparent"
+          penColor="#1a3d8f"
+          // The library ships its own Clear/Save buttons inside the canvas
+          // itself; we hide those and drive everything from our own
+          // buttons below via the imperative ref methods instead, so the
+          // rest of the screen's styling stays consistent.
+          webStyle={`
+            .m-signature-pad { box-shadow: none; border: none; }
+            .m-signature-pad--body { border: none; }
+            .m-signature-pad--footer { display: none; }
+            body,html { background-color: transparent; }
+          `}
+        />
       </View>
 
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
         <TouchableOpacity
           onPress={handleClear}
-          disabled={saving || !hasDrawing}
+          disabled={saving}
           activeOpacity={0.8}
           style={{
             flex: 1, borderRadius: 10, paddingVertical: 12,
             borderWidth: 1.2, borderColor: '#d5d8e2',
             alignItems: 'center', backgroundColor: colors.white,
-            opacity: !hasDrawing ? 0.5 : 1,
           }}
         >
           <Text style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: '700', color: colors.onSurfaceVariant }}>
@@ -109,13 +146,12 @@ export function SignaturePad({ onSave }: { onSave: (fileUri: string) => void }) 
 
         <TouchableOpacity
           onPress={handleSave}
-          disabled={saving || !hasDrawing}
+          disabled={saving}
           activeOpacity={0.8}
           style={{
             flex: 1, borderRadius: 10, paddingVertical: 12,
             backgroundColor: colors.primaryContainer,
             alignItems: 'center', justifyContent: 'center',
-            opacity: !hasDrawing ? 0.5 : 1,
           }}
         >
           {saving ? (

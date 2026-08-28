@@ -211,7 +211,7 @@ export default function DocsScreen() {
           name:         li.description,
           sku:          product?.sku ?? '—',
           invoicedQty:  Math.round(li.quantity),
-          currentStock: product ? Math.round(product.quantityOnHand) : 0,
+          currentStock: product ? Math.round(Number(product.quantityOnHand)) : 0,
         };
       });
 

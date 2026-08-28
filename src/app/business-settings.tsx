@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal,
   Platform, Pressable, ScrollView,
+  StyleSheet,
   Switch, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,9 +13,12 @@ import { SignatureField } from '../components/SignatureField';
 import { DEFAULT_CURRENCY, GLOBAL_CURRENCIES } from '../data/constants';
 
 import { useAuth } from '@/context/AuthContext';
-import { pickAndUploadImage, uploadToCloudinary } from '@/lib/imageUpload';
+import { deleteCloudinaryAsset, pickAndUploadImage, uploadToCloudinary } from '@/lib/imageUpload';
+
+import { useAssetUpload } from '@/hooks/useAssetUpload';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { getErrorMessage } from '@/utils/getErrorMessage';
+import { SaveFormat } from 'expo-image-manipulator';
 import { businessService } from '../services/business';
 import { colors } from '../styles/globals';
 
@@ -277,7 +281,6 @@ export default function BusinessSettingsScreen() {
    
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [bizId,   setBizId]   = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
 
@@ -299,6 +302,9 @@ export default function BusinessSettingsScreen() {
   const [signatureType, setSignatureType] = useState<'none' | 'text' | 'image'>('none');
   const [signatureText, setSignatureText] = useState('');
   const [signatureUrl,  setSignatureUrl]  = useState('');
+
+  const logo = useAssetUpload(logoUrl, setLogoUrl);
+  const signature = useAssetUpload(signatureUrl, setSignatureUrl);
 
   const [currencyPickerVisible, setCurrencyPickerVisible] = useState(false);
   const [colorPickerVisible,    setColorPickerVisible]    = useState(false);
@@ -363,33 +369,42 @@ export default function BusinessSettingsScreen() {
   }, []);
 
   async function handlePickLogo() {
-    setUploadingLogo(true);
-    setGeneralError(null);
-    try {
-      const url = await pickAndUploadImage('business-logos', 'logo.png');
-      if (url) setLogoUrl(url);
-    } catch (err) {
-      setGeneralError(getErrorMessage(err, 'Failed to upload logo. Please try again.'));
-    } finally {
-      setUploadingLogo(false);
-    }
+    await logo.run(
+      () => pickAndUploadImage('business-logos', 'logo.jpg', setLogoUrl),
+      'Failed to upload logo. Please try again.',
+    );
+  }
+
+  async function handleRemoveLogo() {
+    await logo.run(
+      () => deleteCloudinaryAsset('business-logos').then(() => ''),
+      'Failed to remove logo. Please try again.',
+    );
   }
 
   async function handleSignatureCapture(fileUri: string) {
-    setSaving(true);
-    setGeneralError(null);
-    try {
-      const url = await uploadToCloudinary(fileUri, 'business-signatures', 'signature.png');
-      setSignatureUrl(url);
-    } catch (err) {
-      setGeneralError(getErrorMessage(err, 'Failed to upload signature. Please try drawing it again.'));
-    } finally {
-      setSaving(false);
-    }
+    setSignatureUrl(fileUri); // immediate preview of what they just drew
+    await signature.run(
+      () => uploadToCloudinary(
+        fileUri,
+        'business-signatures',
+        undefined, // business-scoped, one slot per business — no resourceId needed
+        'signature.png',
+        SaveFormat.PNG, // keep transparency — this renders over invoice content
+      ),
+      'Failed to upload signature. Please try drawing it again.',
+    );
   }
 
-  function handleRemoveSignature() {
-    setSignatureUrl('');
+  async function handleRemoveSignature() {
+    // Type only flips to "none" once the delete actually succeeds.
+    await signature.run(
+      () => deleteCloudinaryAsset('business-signatures').then(() => {
+        setSignatureType('none');
+        return '';
+      }),
+      'Failed to remove signature. Please try again.',
+    );
   }
 
   function handleSignatureTypeChange(type: 'none' | 'text' | 'image') {
@@ -599,7 +614,7 @@ export default function BusinessSettingsScreen() {
               activeOpacity={0.8}
               style={{ position: 'relative' }}
               onPress={handlePickLogo}
-              disabled={uploadingLogo}
+              disabled={logo.uploading}
             >
               <View style={{
                 width: 72, height: 72, borderRadius: 14,
@@ -607,12 +622,21 @@ export default function BusinessSettingsScreen() {
                 borderWidth: logoUrl ? 1 : 0, borderColor: '#e9ecef',
                 alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
               }}>
-                {uploadingLogo ? (
-                  <ActivityIndicator color={colors.primaryContainer} />
-                ) : logoUrl ? (
+                {logoUrl ? (
                   <Image source={{ uri: logoUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
                 ) : (
                   <MaterialIcons name="flash-on" size={36} color={colors.secondaryContainer} />
+                )}
+                {logo.uploading && (
+                  <View style={[
+                    StyleSheet.absoluteFill,
+                    {
+                      backgroundColor: 'rgba(255,255,255,0.55)',
+                      alignItems: 'center', justifyContent: 'center',
+                    },
+                  ]}>
+                    <ActivityIndicator color={colors.primaryContainer} size="small" />
+                  </View>
                 )}
               </View>
               <View style={{
@@ -639,6 +663,11 @@ export default function BusinessSettingsScreen() {
               }}>
                 Recommended size: 512×512px.{'\n'}PNG or JPG, up to 2MB.
               </Text>
+              {logo.error && (
+                <Text style={{ fontFamily: 'Inter', fontSize: 12, color: '#ba1a1a', marginTop: 6 }}>
+                  {logo.error}
+                </Text>
+              )}
             </View>
           </View>
 
@@ -840,12 +869,17 @@ export default function BusinessSettingsScreen() {
               signatureType={signatureType}
               signatureText={signatureText}
               signatureUrl={signatureUrl}
-              uploading={saving}
+              uploading={signature.uploading}
               onTypeChange={handleSignatureTypeChange}
               onTextChange={setSignatureText}
               onDrawEnd={handleSignatureCapture}
               onRemoveImage={handleRemoveSignature}
             />
+            {signature.error && (
+              <Text style={{ fontFamily: 'Inter', fontSize: 12, color: '#ba1a1a', marginTop: 10 }}>
+                {signature.error}
+              </Text>
+            )}
           </View>
 
           {/* ── Quick links ── */}

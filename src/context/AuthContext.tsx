@@ -6,6 +6,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 interface AuthContextType {
   user: AuthUser | null;
   login: (payload: LoginPayload) => Promise<AuthUser>;
+  loginWithGoogle: (code: string, redirectUri: string) => Promise<{ user: AuthUser; isNew: boolean }>;
   logout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -35,6 +36,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     restoreSession();
   }, []);
 
+  
+
   const login = async (payload: LoginPayload): Promise<AuthUser> => {
     setIsLoading(true);
     try {
@@ -48,13 +51,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const loginWithGoogle = async (code: string, redirectUri: string) => {
+    setIsLoading(true);
+    try {
+      const res = await authService.googleLogin(code, redirectUri);
+      setUser(res.user);
+      return { user: res.user, isNew: res.isNew };
+    } catch (error) {
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     await authService.logout();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, loginWithGoogle, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

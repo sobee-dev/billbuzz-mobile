@@ -1,36 +1,36 @@
+import { useBusiness } from '@/context/BusinessContext';
+import { resolveCurrency } from '@/utils/currencySymbol';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import { reportService, ReportsDashboard } from '../services/reports';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ReportsDashboard, reportService } from '../services/reports';
 import { colors } from '../styles/globals';
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface MonthDatum { month: string; value: number; current?: boolean; }
+function toNum(v: number | string | undefined | null): number {
+  const n = typeof v === 'string' ? parseFloat(v) : (v ?? 0);
+  return typeof n === 'number' && !isNaN(n) ? n : 0;
+}
 
-const MONTHLY: MonthDatum[] = [
-  { month: 'Jan', value: 15200 },
-  { month: 'Feb', value: 18400 },
-  { month: 'Mar', value: 16800 },
-  { month: 'Apr', value: 22100 },
-  { month: 'May', value: 24580 },
-  { month: 'Jun', value: 28300, current: true },
-];
+function fmtMoney(v: number | string | undefined | null, symbol: string): string {
+  return `${symbol}${toNum(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 const CHART_H = 100;
-const MAX_VAL = Math.max(...MONTHLY.map(m => m.value));
 
 // ─── Module-level components ──────────────────────────────────────────────────
 
-function BarChart() {
+function BarChart({ data }: { data: ReportsDashboard['monthlyRevenue'] }) {
+  const maxVal = Math.max(1, ...data.map(m => toNum(m.value)));
+
   return (
     <View>
-      {/* Bars */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_H }}>
-        {MONTHLY.map(m => {
-          const h = Math.max(6, Math.round((m.value / MAX_VAL) * CHART_H));
+        {data.map(m => {
+          const h = Math.max(6, Math.round((toNum(m.value) / maxVal) * CHART_H));
           return (
             <View key={m.month} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
               <View style={{
@@ -45,9 +45,8 @@ function BarChart() {
         })}
       </View>
 
-      {/* Labels */}
       <View style={{ flexDirection: 'row', marginTop: 10 }}>
-        {MONTHLY.map(m => (
+        {data.map(m => (
           <View key={m.month} style={{ flex: 1, alignItems: 'center' }}>
             <Text style={{
               fontFamily: 'Inter',
@@ -133,13 +132,30 @@ function MiniStat({ label, value, color }: { label: string; value: string; color
 
 export default function AnalyticsScreen() {
   const router = useRouter();
-  const [report, setReport] = useState<ReportsDashboard | null>(null);
+  const { business } = useBusiness();
+  const currencySymbol = business?.currency ? resolveCurrency(business.currency).symbol : '';
+
+  const [report,  setReport]  = useState<ReportsDashboard | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     reportService.getDashboard()
-      .then(data => setReport(data))
-      .catch(() => {}); // keep mock data on error
+      .then(data => { if (!cancelled) setReport(data); })
+      .catch(() => { if (!cancelled) setReport(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
+
+  const growthIsPositive = report ? !report.revenueGrowth.startsWith('-') && report.revenueGrowth !== '—' : true;
+
+  if (loading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={colors.primaryContainer} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
@@ -167,9 +183,6 @@ export default function AnalyticsScreen() {
         }}>
           BillBuzz
         </Text>
-        <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
-          <MaterialIcons name="search" size={22} color={colors.onSurface} />
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -191,69 +204,99 @@ export default function AnalyticsScreen() {
           </Text>
         </View>
 
-        {/* ── Total Revenue card ── */}
-        <View style={{
-          backgroundColor: colors.white, borderRadius: 16,
-          borderWidth: 1, borderColor: '#e9ecef',
-          padding: 20, marginBottom: 12,
-          shadowColor: colors.primaryContainer, shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
-        }}>
-          <Text style={{
-            fontFamily: 'Inter', fontSize: 11, fontWeight: '700',
-            textTransform: 'uppercase', letterSpacing: 0.8,
-            color: colors.onSurfaceVariant, marginBottom: 8,
-          }}>
-            Total Revenue
-          </Text>
-          <Text style={{
-            fontFamily: 'Inter', fontSize: 36, fontWeight: '800', color: colors.onSurface,
-          }}>
-            {report
-              ? `$${report.revenueTotal?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '—'}`
-              : '$128,450.00'}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
-            <MaterialIcons name="trending-up" size={17} color="#2e7d32" />
-            <Text style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: '600', color: '#2e7d32' }}>
-              {report?.revenueGrowth ?? '+12.5%'} vs last month
-            </Text>
-          </View>
-        </View>
-
-        {/* ── Outstanding + Collection Rate ── */}
-        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-          <MiniStat
-            label="Outstanding"
-            value={report ? `$${report.outstandingTotal?.toLocaleString() ?? '—'}` : '$14,200'}
-            color={colors.error}
-          />
-          <MiniStat
-            label="Collection Rate"
-            value={report?.collectionRate ?? '—'}
-            color={colors.onSurface}
-          />
-        </View>
-
-        {/* ── Monthly Revenue chart ── */}
-        <View style={{
-          backgroundColor: colors.white, borderRadius: 16,
-          borderWidth: 1, borderColor: '#e9ecef',
-          padding: 20, marginBottom: 28,
-          shadowColor: colors.primaryContainer, shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
-        }}>
+        {!report ? (
           <View style={{
-            flexDirection: 'row', alignItems: 'center',
-            justifyContent: 'space-between', marginBottom: 16,
+            backgroundColor: colors.white, borderRadius: 16,
+            borderWidth: 1, borderColor: '#e9ecef',
+            padding: 24, alignItems: 'center', marginBottom: 20,
           }}>
-            <Text style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: '700', color: colors.onSurface }}>
-              Monthly Revenue
+            <Text style={{ fontFamily: 'Inter', fontSize: 14, color: colors.onSurfaceVariant }}>
+              Could not load your business insights.
             </Text>
-            <MaterialIcons name="bar-chart" size={22} color={colors.onSurfaceVariant} />
           </View>
-          <BarChart />
-        </View>
+        ) : (
+          <>
+            {/* ── Total Revenue card ── */}
+            <View style={{
+              backgroundColor: colors.white, borderRadius: 16,
+              borderWidth: 1, borderColor: '#e9ecef',
+              padding: 20, marginBottom: 12,
+              shadowColor: colors.primaryContainer, shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
+            }}>
+              <Text style={{
+                fontFamily: 'Inter', fontSize: 11, fontWeight: '700',
+                textTransform: 'uppercase', letterSpacing: 0.8,
+                color: colors.onSurfaceVariant, marginBottom: 8,
+              }}>
+                Revenue This Month
+              </Text>
+              <Text style={{
+                fontFamily: 'Inter', fontSize: 36, fontWeight: '800', color: colors.onSurface,
+              }}>
+                {fmtMoney(report.revenueTotal, currencySymbol)}
+              </Text>
+              {report.revenueGrowth !== '—' && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
+                  <MaterialIcons
+                    name={growthIsPositive ? 'trending-up' : 'trending-down'}
+                    size={17}
+                    color={growthIsPositive ? '#2e7d32' : colors.error}
+                  />
+                  <Text style={{
+                    fontFamily: 'Inter', fontSize: 13, fontWeight: '600',
+                    color: growthIsPositive ? '#2e7d32' : colors.error,
+                  }}>
+                    {report.revenueGrowth} vs last month
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── Outstanding + Collection Rate ── */}
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+              <MiniStat
+                label="Outstanding"
+                value={fmtMoney(report.outstandingTotal, currencySymbol)}
+                color={colors.error}
+              />
+              <MiniStat
+                label="Collection Rate"
+                value={report.collectionRate}
+                color={colors.onSurface}
+              />
+            </View>
+
+            {/* ── Avg Invoice Value ── */}
+            <View style={{ marginBottom: 12 }}>
+              <MiniStat
+                label="Avg. Invoice Value (This Month)"
+                value={fmtMoney(report.avgInvoiceValue, currencySymbol)}
+                color={colors.primaryContainer}
+              />
+            </View>
+
+            {/* ── Monthly Revenue chart ── */}
+            <View style={{
+              backgroundColor: colors.white, borderRadius: 16,
+              borderWidth: 1, borderColor: '#e9ecef',
+              padding: 20, marginBottom: 28,
+              shadowColor: colors.primaryContainer, shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
+            }}>
+              <View style={{
+                flexDirection: 'row', alignItems: 'center',
+                justifyContent: 'space-between', marginBottom: 16,
+              }}>
+                <Text style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: '700', color: colors.onSurface }}>
+                  Monthly Revenue
+                </Text>
+                <MaterialIcons name="bar-chart" size={22} color={colors.onSurfaceVariant} />
+              </View>
+              <BarChart data={report.monthlyRevenue} />
+            </View>
+          </>
+        )}
 
         {/* ── Business Insights header ── */}
         <Text style={{
@@ -284,7 +327,7 @@ export default function AnalyticsScreen() {
             iconBg={colors.secondaryContainer}
             iconColor={colors.onSecondaryContainer}
             label="Customer Analytics"
-            sub="LTV, payment trends & overdue"
+            sub="LTV, payment trends & balances due"
             onPress={() => router.push('/customer-analytics' as never)}
           />
           <InsightRow
@@ -298,64 +341,71 @@ export default function AnalyticsScreen() {
           />
         </View>
 
-        {/* ── Owner Advisory card ── */}
-        <View style={{
-          backgroundColor: colors.primaryContainer,
-          borderRadius: 16, padding: 22, overflow: 'hidden',
-        }}>
-          {/* Decorative rings */}
+        {/* ── Owner Advisory card — real data ── */}
+        {report && (
           <View style={{
-            position: 'absolute', top: -32, right: -32,
-            width: 120, height: 120, borderRadius: 60,
-            borderWidth: 18, borderColor: 'rgba(255,255,255,0.06)',
-          }} />
-          <View style={{
-            position: 'absolute', top: 16, right: 20,
-            width: 60, height: 60, borderRadius: 30,
-            borderWidth: 10, borderColor: 'rgba(255,255,255,0.08)',
-          }} />
+            backgroundColor: colors.primaryContainer,
+            borderRadius: 16, padding: 22, overflow: 'hidden',
+          }}>
+            <View style={{
+              position: 'absolute', top: -32, right: -32,
+              width: 120, height: 120, borderRadius: 60,
+              borderWidth: 18, borderColor: 'rgba(255,255,255,0.06)',
+            }} />
+            <View style={{
+              position: 'absolute', top: 16, right: 20,
+              width: 60, height: 60, borderRadius: 30,
+              borderWidth: 10, borderColor: 'rgba(255,255,255,0.08)',
+            }} />
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-            <MaterialIcons name="lightbulb-outline" size={15} color={colors.secondaryContainer} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+              <MaterialIcons name="lightbulb-outline" size={15} color={colors.secondaryContainer} />
+              <Text style={{
+                fontFamily: 'Inter', fontSize: 11, fontWeight: '700',
+                textTransform: 'uppercase', letterSpacing: 0.8,
+                color: colors.secondaryContainer,
+              }}>
+                Owner Advisory
+              </Text>
+            </View>
+
             <Text style={{
-              fontFamily: 'Inter', fontSize: 11, fontWeight: '700',
-              textTransform: 'uppercase', letterSpacing: 0.8,
-              color: colors.secondaryContainer,
+              fontFamily: 'Inter', fontSize: 24, fontWeight: '800',
+              color: colors.white, lineHeight: 32,
             }}>
-              Owner Advisory
+              {report.revenueGrowth === '—'
+                ? 'No revenue recorded yet'
+                : `Revenue is ${growthIsPositive ? 'up' : 'down'} ${report.revenueGrowth.replace('+', '').replace('-', '')}\nthis month`}
             </Text>
+
+            <Text style={{
+              fontFamily: 'Inter', fontSize: 13,
+              color: 'rgba(255,255,255,0.7)', marginTop: 10, lineHeight: 20,
+            }}>
+              {report.revenueGrowth === '—'
+                ? 'Once you have paid invoices, monthly trends will show up here.'
+                : growthIsPositive
+                  ? 'Strong invoicing performance is driving growth compared to last month.'
+                  : 'Revenue has slowed compared to last month — worth a closer look at outstanding invoices.'}
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => router.push('/(owner-tabs)/docs' as never)}
+              activeOpacity={0.8}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 6,
+                marginTop: 16, alignSelf: 'flex-start',
+                backgroundColor: 'rgba(255,255,255,0.14)',
+                borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14,
+              }}
+            >
+              <Text style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: '700', color: colors.white }}>
+                See full breakdown
+              </Text>
+              <MaterialIcons name="arrow-forward" size={16} color={colors.white} />
+            </TouchableOpacity>
           </View>
-
-          <Text style={{
-            fontFamily: 'Inter', fontSize: 24, fontWeight: '800',
-            color: colors.white, lineHeight: 32,
-          }}>
-            Revenue is up 4%{'\n'}this week
-          </Text>
-
-          <Text style={{
-            fontFamily: 'Inter', fontSize: 13,
-            color: 'rgba(255,255,255,0.7)', marginTop: 10, lineHeight: 20,
-          }}>
-            Strong invoicing performance and repeat client activity are driving growth this quarter.
-          </Text>
-
-          <TouchableOpacity
-            onPress={() => {/* future deep-dive screen */}}
-            activeOpacity={0.8}
-            style={{
-              flexDirection: 'row', alignItems: 'center', gap: 6,
-              marginTop: 16, alignSelf: 'flex-start',
-              backgroundColor: 'rgba(255,255,255,0.14)',
-              borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14,
-            }}
-          >
-            <Text style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: '700', color: colors.white }}>
-              See full breakdown
-            </Text>
-            <MaterialIcons name="arrow-forward" size={16} color={colors.white} />
-          </TouchableOpacity>
-        </View>
+        )}
 
       </ScrollView>
     </SafeAreaView>

@@ -14,8 +14,11 @@ import { resolveCurrency } from '@/utils/currencySymbol';
 import { fmtDateTime } from '@/utils/formatDate';
 import { RecentDocument, SummaryData, businessService } from '../../services/business';
 import { DocumentStatus, DocumentType, documentService } from '../../services/documents';
+import { ReportsDashboard, reportService } from '../../services/reports';
 import { colors } from '../../styles/globals';
 import { getDisplayName } from '../../utils/displayName';
+
+
 // ─── Assets ───────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO      = require('../../../assets/images/logo.png')      as number;
@@ -237,26 +240,38 @@ export default function OwnerDashboard() {
   const [imageError, setImageError] = useState(false);
   const lowStockCount = stats?.lowStockCount ?? 0;
   const hasLowStock = !!stats && lowStockCount > 0;
+  const [report, setReport] = useState<ReportsDashboard | null>(null);
+
+
   // All hooks must run unconditionally, in the same order every render —
   // the businessLoading early return has to come AFTER every hook call,
   // never before one, or React's hook-order invariant breaks.
   useFocusEffect(
-  useCallback(() => {
-    let cancelled = false;
-    businessService.getSummaryData()
-      .then((s) => {
-        if (cancelled) return;
-        setStats(s);
-        setRecentDocs(s.recentDocuments?.slice(0, 4) ?? []);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setStats(null);
-        setRecentDocs([]);
-      });
-    return () => { cancelled = true; };
-  }, []),
-);
+    useCallback(() => {
+      let cancelled = false;
+      businessService.getSummaryData()
+        .then((s) => {
+          if (cancelled) return;
+          setStats(s);
+          setRecentDocs(s.recentDocuments?.slice(0, 4) ?? []);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setStats(null);
+          setRecentDocs([]);
+        });
+      reportService.getDashboard()
+        .then((r) => {
+          if (cancelled) return;
+          setReport(r);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setReport(null);
+        });
+      return () => { cancelled = true; };
+    }, []),
+  );
 
   if (businessLoading) return <LoadingScreen text="Loading business details..." />;
 
@@ -312,6 +327,8 @@ export default function OwnerDashboard() {
       .join('\n');
     Alert.alert('Inventory Updated', lines || 'No stock changes were made.');
   };
+
+  const growthIsPositive = report ? !report.revenueGrowth.startsWith('-') && report.revenueGrowth !== '—' : true;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
@@ -567,7 +584,9 @@ export default function OwnerDashboard() {
                     </Text>
                   </View>
                   <Text style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: '700', color: colors.white }}>
-                    Revenue is up 4% this week
+                    {!report || report.revenueGrowth === '—'
+                      ? 'No revenue recorded yet'
+                      : `Revenue is ${growthIsPositive ? 'up' : 'down'} ${report.revenueGrowth.replace('+', '').replace('-', '')} this month`}
                   </Text>
                   <Text style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.72)', marginTop: 3 }}>
                     Tap to view full analytics →

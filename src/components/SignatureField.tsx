@@ -64,7 +64,7 @@ export function SignatureField({
       }}>
         <SegmentTab label="None" active={signatureType === 'none'} onPress={() => onTypeChange('none')} />
         <SegmentTab label="Draw" active={signatureType === 'image'} onPress={() => onTypeChange('image')} />
-        <SegmentTab label="Type" active={signatureType === 'text'} onPress={() => onTypeChange('text')} />
+        <SegmentTab label="Text" active={signatureType === 'text'} onPress={() => onTypeChange('text')} />
       </View>
 
       {signatureType === 'text' && (
@@ -87,7 +87,7 @@ export function SignatureField({
             }}>
               <Text style={{
                 fontFamily: 'Inter', fontSize: 26, fontStyle: 'italic',
-                color: colors.onSurface,
+                color: '#1a3d8f',
               }}>
                 {signatureText}
               </Text>

@@ -1,135 +1,126 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { staffService } from '../services/staff';
 import {
-  Alert, Modal, Pressable, ScrollView,
+  ActivityIndicator, Modal, Pressable, ScrollView,
   Text, TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  AccessLevel, ROLE_CHIP, ROLE_LABEL, STAFF_MEMBERS,
-  StaffMember, StaffRole, StaffStatus, staffInitials,
-} from '../data/staff';
+import { PermissionLevel, StaffMember, StaffStatus, staffService } from '../services/staff';
 import { colors } from '../styles/globals';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type FilterRole   = StaffRole | 'all';
+type FilterLevel  = PermissionLevel | 'all';
 type FilterStatus = StaffStatus | 'all';
 
-// ─── Status display ───────────────────────────────────────────────────────────
-const STATUS_DISPLAY: Record<StaffStatus, { label: string; color: string }> = {
-  active:   { label: '● Active',      color: '#1e7e34'              },
-  inactive: { label: '● Inactive',    color: colors.onSurfaceVariant },
-  pending:  { label: 'Invite Sent',   color: colors.onSecondaryContainer },
+// ─── Display config — matches the real two-value PermissionLevel/StaffStatus ──
+const LEVEL_CHIP: Record<PermissionLevel, { bg: string; fg: string; label: string }> = {
+  managerial_access: { bg: colors.secondaryContainer, fg: colors.onSecondaryContainer, label: 'Managerial' },
+  limited_access:    { bg: '#f0f0f4',                 fg: colors.onSurfaceVariant,     label: 'Limited'    },
 };
+
+const STATUS_DISPLAY: Record<StaffStatus, { label: string; color: string }> = {
+  active:   { label: '● Active',   color: '#1e7e34' },
+  inactive: { label: '● Inactive', color: colors.onSurfaceVariant },
+};
+
+const AVATAR_COLORS = ['#1b2e5e', '#c47f17', '#2e7d32', '#0277bd', '#c62828', '#6a1b9a'];
+
+function avatarColorFor(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+function initials(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 // ─── Staff card (module-level) ────────────────────────────────────────────────
 function StaffCard({
-  member,
-  onPress,
-  onThreeDot,
+  member, onPress,
 }: {
-  member:     StaffMember;
-  onPress:    (() => void) | null;
-  onThreeDot: () => void;
+  member:  StaffMember;
+  onPress: () => void;
 }) {
-  const chip   = ROLE_CHIP[member.role];
+  const chip   = LEVEL_CHIP[member.permissionLevel];
   const status = STATUS_DISPLAY[member.status];
 
-  const card = (
-    <View style={{
-      backgroundColor: colors.white,
-      borderRadius: 16, borderWidth: 1, borderColor: '#e9ecef',
-      padding: 14,
-      flexDirection: 'row', alignItems: 'center',
-      gap: 12, marginBottom: 10,
-      shadowColor: '#1b2e5e',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 4,
-      elevation: 1,
-    }}>
-
-      {/* Avatar */}
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.75}>
       <View style={{
-        width: 52, height: 52, borderRadius: 26,
-        backgroundColor: member.status === 'pending' ? '#e9ecef' : member.avatarColor,
-        alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
+        backgroundColor: colors.white,
+        borderRadius: 16, borderWidth: 1, borderColor: '#e9ecef',
+        padding: 14,
+        flexDirection: 'row', alignItems: 'center',
+        gap: 12, marginBottom: 10,
+        shadowColor: '#1b2e5e',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+        elevation: 1,
       }}>
-        {member.status === 'pending' ? (
-          <MaterialIcons name="more-horiz" size={22} color={colors.onSurfaceVariant} />
-        ) : (
+
+        {/* Avatar */}
+        <View style={{
+          width: 52, height: 52, borderRadius: 26,
+          backgroundColor: avatarColorFor(member.id),
+          alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}>
           <Text style={{
             fontFamily: 'Inter', fontSize: 18, fontWeight: '800',
             color: colors.white,
           }}>
-            {staffInitials(member)}
+            {initials(member.fullName)}
           </Text>
-        )}
-      </View>
-
-      {/* Info */}
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
-          <Text style={{
-            fontFamily: 'Inter', fontSize: 15, fontWeight: '700',
-            color: member.status === 'inactive' ? colors.onSurfaceVariant : colors.onSurface,
-          }}>
-            {member.name}
-          </Text>
-          <View style={{
-            backgroundColor: chip.bg, borderRadius: 6,
-            paddingVertical: 2, paddingHorizontal: 7,
-          }}>
-            <Text style={{
-              fontFamily: 'Inter', fontSize: 10, fontWeight: '700',
-              color: chip.fg,
-            }}>
-              {ROLE_LABEL[member.role]}
-            </Text>
-          </View>
         </View>
-        <Text style={{
-          fontFamily: 'Inter', fontSize: 12,
-          color: colors.onSurfaceVariant,
-        }} numberOfLines={1}>
-          {member.email}
-        </Text>
-      </View>
 
-      {/* Right: status + action */}
-      <View style={{ alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-        <Text style={{
-          fontFamily: 'Inter', fontSize: 12, fontWeight: '600',
-          color: status.color,
-        }}>
-          {status.label}
-        </Text>
-        {member.status === 'pending' ? (
-          <TouchableOpacity
-            onPress={onThreeDot}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="more-vert" size={20} color={colors.onSurfaceVariant} />
-          </TouchableOpacity>
-        ) : (
+        {/* Info */}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
+            <Text style={{
+              fontFamily: 'Inter', fontSize: 15, fontWeight: '700',
+              color: member.status === 'inactive' ? colors.onSurfaceVariant : colors.onSurface,
+            }}>
+              {member.fullName}
+            </Text>
+            <View style={{
+              backgroundColor: chip.bg, borderRadius: 6,
+              paddingVertical: 2, paddingHorizontal: 7,
+            }}>
+              <Text style={{
+                fontFamily: 'Inter', fontSize: 10, fontWeight: '700',
+                color: chip.fg,
+              }}>
+                {chip.label}
+              </Text>
+            </View>
+          </View>
+          <Text style={{
+            fontFamily: 'Inter', fontSize: 12,
+            color: colors.onSurfaceVariant,
+          }} numberOfLines={1}>
+            {member.email}{member.department ? ` · ${member.department}` : ''}
+          </Text>
+        </View>
+
+        {/* Right: status + chevron */}
+        <View style={{ alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+          <Text style={{
+            fontFamily: 'Inter', fontSize: 12, fontWeight: '600',
+            color: status.color,
+          }}>
+            {status.label}
+          </Text>
           <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-        )}
+        </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
-
-  if (onPress) {
-    return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.75}>
-        {card}
-      </TouchableOpacity>
-    );
-  }
-  return card;
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -137,63 +128,64 @@ export default function StaffListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // Filter state
-  const [filterVisible,  setFilterVisible]  = useState(false);
-  const [filterRole,     setFilterRole]     = useState<FilterRole>('all');
-  const [filterStatus,   setFilterStatus]   = useState<FilterStatus>('all');
-  const [pendingRole,    setPendingRole]     = useState<FilterRole>('all');
-  const [pendingStatus,  setPendingStatus]   = useState<FilterStatus>('all');
-  const [members,        setMembers]         = useState<StaffMember[]>(STAFF_MEMBERS);
+  const [filterVisible, setFilterVisible] = useState(false);
+  const [filterLevel,   setFilterLevel]   = useState<FilterLevel>('all');
+  const [filterStatus,  setFilterStatus]  = useState<FilterStatus>('all');
+  const [pendingLevel,  setPendingLevel]  = useState<FilterLevel>('all');
+  const [pendingStatus, setPendingStatus] = useState<FilterStatus>('all');
+
+  const [members, setMembers] = useState<StaffMember[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
+      let cancelled = false;
+      setLoading(true);
       staffService.list()
-        .then(data => {
-          const results = data.results ?? data;
-          if (Array.isArray(results) && results.length) setMembers(results as StaffMember[]);
-        })
-        .catch(() => {});
+        .then(data => { if (!cancelled) setMembers(data); })
+        .catch(() => { if (!cancelled) setMembers([]); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+      return () => { cancelled = true; };
     }, []),
   );
 
-  // Pending member three-dot
-  const [dotMemberId,  setDotMemberId]  = useState<string | null>(null);
-
   const filtered = useMemo(() => {
     return members.filter(m => {
-      const roleOk   = filterRole   === 'all' || m.role   === filterRole;
+      const levelOk  = filterLevel  === 'all' || m.permissionLevel === filterLevel;
       const statusOk = filterStatus === 'all' || m.status === filterStatus;
-      return roleOk && statusOk;
+      return levelOk && statusOk;
     });
-  }, [filterRole, filterStatus]);
+  }, [members, filterLevel, filterStatus]);
 
-  const hasActiveFilter = filterRole !== 'all' || filterStatus !== 'all';
+  const hasActiveFilter = filterLevel !== 'all' || filterStatus !== 'all';
 
   const openFilter = () => {
-    setPendingRole(filterRole);
+    setPendingLevel(filterLevel);
     setPendingStatus(filterStatus);
     setFilterVisible(true);
   };
 
   const applyFilter = () => {
-    setFilterRole(pendingRole);
+    setFilterLevel(pendingLevel);
     setFilterStatus(pendingStatus);
     setFilterVisible(false);
   };
 
   const clearFilter = () => {
-    setPendingRole('all');
+    setPendingLevel('all');
     setPendingStatus('all');
-    setFilterRole('all');
+    setFilterLevel('all');
     setFilterStatus('all');
     setFilterVisible(false);
   };
 
-  const handleThreeDot = (member: StaffMember) => {
-    setDotMemberId(member.id);
-  };
-
-  const dotMember = STAFF_MEMBERS.find(m => m.id === dotMemberId);
+  if (loading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={colors.primaryContainer} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
@@ -222,9 +214,6 @@ export default function StaffListScreen() {
           }}>
             BillBuzz
           </Text>
-          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
-            <MaterialIcons name="search" size={22} color={colors.onSurface} />
-          </TouchableOpacity>
         </View>
 
         {/* ── Body ── */}
@@ -249,7 +238,7 @@ export default function StaffListScreen() {
                 fontFamily: 'Inter', fontSize: 12, fontWeight: '700',
                 color: colors.onSecondaryContainer,
               }}>
-                {STAFF_MEMBERS.length} TOTAL
+                {members.length} TOTAL
               </Text>
             </View>
           </View>
@@ -309,27 +298,25 @@ export default function StaffListScreen() {
               <Text style={{
                 fontFamily: 'Inter', fontSize: 14, color: colors.onSurfaceVariant, marginTop: 12,
               }}>
-                No staff match the current filter
+                {members.length === 0 ? 'No staff members yet' : 'No staff match the current filter'}
               </Text>
-              <TouchableOpacity onPress={clearFilter} style={{ marginTop: 12 }}>
-                <Text style={{
-                  fontFamily: 'Inter', fontSize: 13, fontWeight: '700',
-                  color: colors.primaryContainer,
-                }}>
-                  Clear Filter
-                </Text>
-              </TouchableOpacity>
+              {hasActiveFilter && (
+                <TouchableOpacity onPress={clearFilter} style={{ marginTop: 12 }}>
+                  <Text style={{
+                    fontFamily: 'Inter', fontSize: 13, fontWeight: '700',
+                    color: colors.primaryContainer,
+                  }}>
+                    Clear Filter
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             filtered.map(member => (
               <StaffCard
                 key={member.id}
                 member={member}
-                onPress={member.status !== 'pending'
-                  ? () => router.push(`/new-staff?id=${member.id}` as never)
-                  : null
-                }
-                onThreeDot={() => handleThreeDot(member)}
+                onPress={() => router.push(`/new-staff?id=${member.id}` as never)}
               />
             ))
           )}
@@ -356,70 +343,6 @@ export default function StaffListScreen() {
 
       </View>
 
-      {/* ── Pending member three-dot menu ── */}
-      <Modal
-        visible={dotMemberId !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDotMemberId(null)}
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }}
-          onPress={() => setDotMemberId(null)}
-        >
-          <View style={{
-            position: 'absolute', top: 200, right: 16,
-            backgroundColor: colors.white,
-            borderRadius: 14, borderWidth: 1, borderColor: '#e9ecef',
-            minWidth: 190,
-            shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.12, shadowRadius: 10, elevation: 8,
-            overflow: 'hidden',
-          }}>
-            <TouchableOpacity
-              onPress={() => {
-                setDotMemberId(null);
-                Alert.alert('Resend Invite', `Invite resent to ${dotMember?.email ?? ''}.`);
-              }}
-              activeOpacity={0.75}
-              style={{
-                flexDirection: 'row', alignItems: 'center',
-                paddingVertical: 14, paddingHorizontal: 16,
-                borderBottomWidth: 1, borderBottomColor: '#e9ecef', gap: 12,
-              }}
-            >
-              <MaterialIcons name="send" size={18} color={colors.onSurface} />
-              <Text style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: '600', color: colors.onSurface }}>
-                Resend Invite
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                setDotMemberId(null);
-                Alert.alert(
-                  'Cancel Invite',
-                  `Cancel invite for ${dotMember?.name ?? ''}?`,
-                  [
-                    { text: 'Keep', style: 'cancel' },
-                    { text: 'Cancel Invite', style: 'destructive', onPress: () => {} },
-                  ],
-                );
-              }}
-              activeOpacity={0.75}
-              style={{
-                flexDirection: 'row', alignItems: 'center',
-                paddingVertical: 14, paddingHorizontal: 16, gap: 12,
-              }}
-            >
-              <MaterialIcons name="cancel" size={18} color={colors.error} />
-              <Text style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: '600', color: colors.error }}>
-                Cancel Invite
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
-
       {/* ── Filter bottom sheet ── */}
       <Modal
         visible={filterVisible}
@@ -437,13 +360,11 @@ export default function StaffListScreen() {
               borderTopLeftRadius: 24, borderTopRightRadius: 24,
               paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 24,
             }}>
-              {/* Handle */}
               <View style={{
                 width: 40, height: 4, borderRadius: 2, backgroundColor: '#dde1e7',
                 alignSelf: 'center', marginTop: 14, marginBottom: 4,
               }} />
 
-              {/* Header */}
               <View style={{
                 flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                 paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20,
@@ -466,21 +387,25 @@ export default function StaffListScreen() {
               </View>
 
               <View style={{ paddingHorizontal: 20 }}>
-                {/* Role filter */}
+                {/* Permission level filter */}
                 <Text style={{
                   fontFamily: 'Inter', fontSize: 11, fontWeight: '700',
                   textTransform: 'uppercase', letterSpacing: 0.7,
                   color: colors.onSurfaceVariant, marginBottom: 10,
                 }}>
-                  Role
+                  Access Level
                 </Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-                  {(['all', 'owner', 'admin', 'manager', 'editor', 'viewer'] as FilterRole[]).map(r => {
-                    const selected = pendingRole === r;
+                  {([
+                    { key: 'all' as FilterLevel, label: 'All Levels' },
+                    { key: 'managerial_access' as FilterLevel, label: 'Managerial' },
+                    { key: 'limited_access' as FilterLevel, label: 'Limited' },
+                  ]).map(opt => {
+                    const selected = pendingLevel === opt.key;
                     return (
                       <TouchableOpacity
-                        key={r}
-                        onPress={() => setPendingRole(r)}
+                        key={opt.key}
+                        onPress={() => setPendingLevel(opt.key)}
                         activeOpacity={0.75}
                         style={{
                           paddingVertical: 7, paddingHorizontal: 14,
@@ -492,9 +417,8 @@ export default function StaffListScreen() {
                         <Text style={{
                           fontFamily: 'Inter', fontSize: 13, fontWeight: '600',
                           color: selected ? colors.white : colors.onSurface,
-                          textTransform: 'capitalize',
                         }}>
-                          {r === 'all' ? 'All Roles' : r.charAt(0).toUpperCase() + r.slice(1)}
+                          {opt.label}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -510,7 +434,7 @@ export default function StaffListScreen() {
                   Status
                 </Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
-                  {(['all', 'active', 'inactive', 'pending'] as FilterStatus[]).map(s => {
+                  {(['all', 'active', 'inactive'] as FilterStatus[]).map(s => {
                     const selected = pendingStatus === s;
                     return (
                       <TouchableOpacity

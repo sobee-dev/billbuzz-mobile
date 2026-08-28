@@ -1,6 +1,7 @@
 // import AsyncStorage from '@react-native-async-storage/async-storage'; // UNCOMMENT FOR STORAGE
 import { GoogleButton } from '@/components/GoogleButton';
 import { useAuth } from '@/context/AuthContext';
+import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -18,7 +19,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../styles/globals';
-
 
 
 
@@ -44,7 +44,9 @@ const DECO = require('../../assets/images/tutorial-web.png') as number;
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
+  const { signInAsync } = useGoogleAuth();
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const [email,        setEmail]        = useState('');
   const [password,     setPassword]     = useState('');
@@ -65,6 +67,22 @@ export default function LoginScreen() {
 
   const isValidPassword = /^\d{6}$/.test(password);
   const canSubmit = email.trim().length > 0 && isValidPassword && !loginLoading;
+
+
+  const handleGooglePress = async () => {
+    setGoogleLoading(true);
+    setLoginError('');
+    try {
+      const result = await signInAsync();
+      if (!result) return; // cancelled
+      const { user } = await loginWithGoogle(result.code, result.redirectUri);
+      router.replace(user.role === 'owner' ? '/(owner-tabs)/dashboard' : '/(staff-tabs)/dashboard');
+    } catch {
+      setLoginError('Could not complete Google sign-in.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim()) { setLoginError('Please enter your email address.'); return; }
@@ -216,7 +234,7 @@ export default function LoginScreen() {
           </View>
 
           {/* Google */}
-          <GoogleButton />
+          <GoogleButton onPress={handleGooglePress} disabled={googleLoading} />
 
           {/* Register */}
           <Text className="font-inter text-body-md text-on-surface-variant text-center mb-4">

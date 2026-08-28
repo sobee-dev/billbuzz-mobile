@@ -1,17 +1,20 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image, KeyboardAvoidingView, Modal, Platform,
-  Pressable, ScrollView, Switch, Text, TextInput, TouchableOpacity, View
+  Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Currency, DEFAULT_CURRENCY, GLOBAL_CURRENCIES } from '../../data/constants';
 import { BusinessProfile, businessService } from '../../services/business';
 import { colors } from '../../styles/globals';
 
-import { pickAndUploadImage, uploadToCloudinary } from '@/lib/imageUpload';
+import { deleteCloudinaryAsset, pickAndUploadImage, uploadToCloudinary } from '@/lib/imageUpload';
+
+import { useAssetUpload } from '@/hooks/useAssetUpload';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 import { SignatureField } from '../../components/SignatureField';
@@ -208,12 +211,16 @@ export default function OnboardingStep2() {
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
   const [logoUrl,        setLogoUrl]        = useState('');
-  const [uploadingLogo,  setUploadingLogo]  = useState(false);
 
   const [signatureType, setSignatureType] = useState<'none' | 'text' | 'image'>('none');
   const [signatureText, setSignatureText] = useState('');
   const [signatureUrl,  setSignatureUrl]  = useState('');
   const [generalError,  setGeneralError]  = useState<string | null>(null);
+
+  // Each owns its own uploading/error state now — no more hand-rolled
+  // previous-value tracking per field.
+  const logo = useAssetUpload(logoUrl, setLogoUrl);
+  const signature = useAssetUpload(signatureUrl, setSignatureUrl);
 
   // Load the owner's business record so this screen reflects (and can
   // update) whatever was already saved in step 1 or a previous visit here.
@@ -250,33 +257,47 @@ export default function OnboardingStep2() {
   
 
   async function handlePickLogo() {
-    setUploadingLogo(true);
-    setGeneralError(null);
-    try {
-      const url = await pickAndUploadImage('business-logos', 'logo.png');
-      if (url) setLogoUrl(url);
-    } catch (err) {
-      setGeneralError(getErrorMessage(err, 'Failed to upload logo. Please try again.'));
-    } finally {
-      setUploadingLogo(false);
-    }
+    // pickAndUploadImage still handles the "show it right away" preview
+    // internally via its onLocalPreview callback — the hook just wraps
+    // the upload call itself and manages loading/error/revert.
+    await logo.run(
+      () => pickAndUploadImage('business-logos', 'logo.jpg', setLogoUrl),
+      'Failed to upload logo. Please try again.',
+    );
+  }
+
+  async function handleRemoveLogo() {
+    await logo.run(
+      () => deleteCloudinaryAsset('business-logos').then(() => ''),
+      'Failed to remove logo. Please try again.',
+    );
   }
 
   async function handleSignatureCapture(fileUri: string) {
-    setSaving(true);
-    setGeneralError(null);
-    try {
-      const url = await uploadToCloudinary(fileUri, 'business-signatures', 'signature.png');
-      setSignatureUrl(url);
-    } catch (err) {
-      setGeneralError(getErrorMessage(err, 'Failed to upload signature. Please try drawing it again.'));
-    } finally {
-      setSaving(false);
-    }
+    setSignatureUrl(fileUri); // immediate preview of the just-drawn signature
+    await signature.run(
+      () => uploadToCloudinary(
+        fileUri,
+        'business-signatures',
+        undefined, // business-scoped, one slot per business — no resourceId needed
+        'signature.png',
+        ImageManipulator.SaveFormat.PNG, // preserve transparency for invoice overlay
+      ),
+      'Failed to upload signature. Please try drawing it again.',
+    );
   }
 
-  function handleRemoveSignature() {
-    setSignatureUrl('');
+  async function handleRemoveSignature() {
+    // Only flip the segmented control to "None" once the delete actually
+    // succeeds — no need to optimistically clear it and then untangle
+    // reverting two pieces of state on failure.
+    await signature.run(
+      () => deleteCloudinaryAsset('business-signatures').then(() => {
+        setSignatureType('none');
+        return '';
+      }),
+      'Failed to remove signature. Please try again.',
+    );
   }
 
   function handleSignatureTypeChange(type: 'none' | 'text' | 'image') {
@@ -440,7 +461,8 @@ export default function OnboardingStep2() {
             <SectionLabel label="Business Logo" />
             <TouchableOpacity
               onPress={handlePickLogo}
-              disabled={uploadingLogo}
+              onLongPress={logoUrl ? handleRemoveLogo : undefined}
+              disabled={logo.uploading}
               activeOpacity={0.8}
               style={{
                 borderWidth: 1.5, borderColor: '#c8ccd8', borderStyle: logoUrl ? 'solid' : 'dashed',
@@ -449,22 +471,35 @@ export default function OnboardingStep2() {
                 backgroundColor: '#fafbfd',
               }}
             >
-              {uploadingLogo ? (
-                <ActivityIndicator color={colors.primaryContainer} />
-              ) : logoUrl ? (
+              {logoUrl ? (
                 <>
-                  <Image
-                    source={{ uri: logoUrl }}
-                    style={{ width: 72, height: 72, borderRadius: 12 }}
-                    resizeMode="contain"
-                  />
+                  <View>
+                    <Image
+                      source={{ uri: logoUrl }}
+                      style={{ width: 72, height: 72, borderRadius: 12 }}
+                      resizeMode="contain"
+                    />
+                    {logo.uploading && (
+                      <View style={[
+                        StyleSheet.absoluteFill,
+                        {
+                          backgroundColor: 'rgba(255,255,255,0.6)',
+                          alignItems: 'center', justifyContent: 'center', borderRadius: 12,
+                        },
+                      ]}>
+                        <ActivityIndicator color={colors.primaryContainer} size="small" />
+                      </View>
+                    )}
+                  </View>
                   <Text style={{
                     fontFamily: 'Inter', fontSize: 12, fontWeight: '700',
                     color: colors.primaryContainer,
                   }}>
-                    Change Logo
+                    Change Logo · Hold to Remove
                   </Text>
                 </>
+              ) : logo.uploading ? (
+                <ActivityIndicator color={colors.primaryContainer} />
               ) : (
                 <>
                   <MaterialIcons name="upload-file" size={32} color={colors.primaryContainer} />
@@ -475,14 +510,17 @@ export default function OnboardingStep2() {
                   }}>
                     Upload Logo
                   </Text>
-                  <Text style={{
-                    fontFamily: 'Inter', fontSize: 12, color: colors.onSurfaceVariant,
-                  }}>
+                  <Text style={{ fontFamily: 'Inter', fontSize: 12, color: colors.onSurfaceVariant }}>
                     PNG, JPG up to 5MB
                   </Text>
                 </>
               )}
             </TouchableOpacity>
+            {logo.error && (
+              <Text style={{ fontFamily: 'Inter', fontSize: 12, color: '#ba1a1a', marginTop: 10 }}>
+                {logo.error}
+              </Text>
+            )}
           </View>
 
           {/* ── Card: Currency + Tax ── */}
@@ -632,12 +670,17 @@ export default function OnboardingStep2() {
               signatureType={signatureType}
               signatureText={signatureText}
               signatureUrl={signatureUrl}
-              uploading={saving}
+              uploading={signature.uploading}
               onTypeChange={handleSignatureTypeChange}
               onTextChange={setSignatureText}
               onDrawEnd={handleSignatureCapture}
               onRemoveImage={handleRemoveSignature}
             />
+            {signature.error && (
+              <Text style={{ fontFamily: 'Inter', fontSize: 12, color: '#ba1a1a', marginTop: 10 }}>
+                {signature.error}
+              </Text>
+            )}
           </View>
 
         </ScrollView>

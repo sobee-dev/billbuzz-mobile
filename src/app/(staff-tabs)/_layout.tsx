@@ -7,8 +7,8 @@ import { colors } from '../../styles/globals';
 const TABS = [
   { name: 'dashboard', label: 'Dashboard', icon: 'dashboard'   },
   { name: 'docs',      label: 'Docs',      icon: 'description' },
-  { name: 'clients',   label: 'Clients',   icon: 'people'      },
-  { name: 'more',      label: 'More',      icon: 'more-horiz'  },
+ 
+  { name: 'profile',      label: 'Profile',      icon: 'more-horiz'  },
 ] as const;
 
 function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
@@ -64,6 +64,7 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
 }
 
 export default function StaffTabsLayout() {
+  
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
@@ -71,8 +72,8 @@ export default function StaffTabsLayout() {
     >
       <Tabs.Screen name="dashboard" />
       <Tabs.Screen name="docs"      />
-      <Tabs.Screen name="clients"   />
-      <Tabs.Screen name="more"      />
+      
+      <Tabs.Screen name="profile"      />
     </Tabs>
   );
 }

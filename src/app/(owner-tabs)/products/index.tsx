@@ -209,9 +209,7 @@ export default function ProductsScreen() {
             BillBuzz
           </Text>
         </View>
-        <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <MaterialIcons name="search" size={24} color={colors.onSurface} />
-        </TouchableOpacity>
+       
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 96 }}>

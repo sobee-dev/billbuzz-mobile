@@ -21,6 +21,11 @@ export interface AuthResponse {
   user:    AuthUser;
 }
 
+export interface GoogleAuthResponse extends AuthResponse {
+  isNew: boolean;
+  requiresPasswordChange?: boolean;
+}
+
 export const authService = {
   /** Email + password login — stores tokens on success */
   async login(payload: LoginPayload): Promise<AuthResponse> {
@@ -35,6 +40,15 @@ export const authService = {
   /** Create a new owner account — stores tokens on success */
   async register(payload: RegisterPayload): Promise<AuthResponse> {
     const { data } = await api.post<AuthResponse>('/api/users/register/', payload);
+    await saveTokens(data.access, data.refresh);
+    return data;
+  },
+
+  async googleLogin(code: string, redirectUri: string): Promise<GoogleAuthResponse> {
+    const { data } = await api.post<GoogleAuthResponse>('/api/users/google_callback/', {
+      code,
+      redirect_uri: redirectUri,
+    });
     await saveTokens(data.access, data.refresh);
     return data;
   },

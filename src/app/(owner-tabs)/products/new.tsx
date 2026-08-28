@@ -1,4 +1,5 @@
 import { useBusiness } from '@/context/BusinessContext';
+import { deleteCloudinaryAsset, pickAndUploadImage, pickImage, uploadToCloudinary } from '@/lib/imageUpload';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -10,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -19,6 +21,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { productService } from '../../../services/products';
 import { colors } from '../../../styles/globals';
+
+
 
 
 
@@ -80,7 +84,14 @@ export default function NewProductScreen() {
   const [reorderLevel, setReorderLevel] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
-
+  const [imageUrl, setImageUrl] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  // Only used in "new product" mode: the picked-but-not-yet-uploaded file,
+  // staged locally because there's no product id yet to scope an upload
+  // to. Uploaded for real once handleSave gets a real id back. If the
+  // user abandons the screen, nothing was ever sent to Cloudinary —
+  // there's nothing to clean up.
+  const [pendingLocalImage, setPendingLocalImage] = useState<{ uri: string; mimeType: string } | null>(null);
   // Tracks the qty as last loaded from the server, so we can tell whether
   // the user actually changed it (edit mode only — new products have no
   // "original" to diff against).
@@ -96,12 +107,13 @@ export default function NewProductScreen() {
     productService.get(id).then(p => {
       setName(p.name ?? '');
       setSku(p.sku ?? '');
+      setImageUrl(p.imageUrl ?? '');
       setDescription(p.description ?? '');
       setPrice(String(Number(p.unitPrice) || ''));
       const qtyOnHand = Number(p.quantityOnHand) || 0;
       setQty(String(qtyOnHand));
       setOriginalQty(qtyOnHand);
-      setReorderLevel(String(p.reorderLevel != null ? Number(p.reorderLevel) : 10));
+      setReorderLevel(String(p.reorderLevel != null ? Number(p.reorderLevel) : 3));
       setIsActive(p.isActive ?? true);
     }).catch(() => {});
   }, [id]);
@@ -116,6 +128,52 @@ export default function NewProductScreen() {
   // from what the server last reported?
   const qtyDelta = isEdit && originalQty != null ? parseInt(qty, 10) - originalQty : 0;
   const qtyChanged = isEdit && qtyDelta !== 0;
+
+  async function handlePickImage() {
+  const previous = imageUrl;
+  try {
+    if (isEdit && id) {
+      // Editing an existing product — we already have a real id, so
+      // upload straight away, same as logo/signature elsewhere.
+      setUploadingImage(true);
+      const url = await pickAndUploadImage(
+        'product-images', 'product.jpg', (localUri) => setImageUrl(localUri), id,
+      );
+      if (url) setImageUrl(url);
+    } else {
+      // New product — no id to scope an upload to yet. Stage it locally;
+      // handleSave uploads it once the product is created.
+      const picked = await pickImage((localUri) => setImageUrl(localUri));
+      if (picked) setPendingLocalImage(picked);
+    }
+  } catch (err) {
+    setImageUrl(previous);
+    Alert.alert('Error', getErrorMessage(err, 'Failed to upload image. Please try again.'));
+  } finally {
+    setUploadingImage(false);
+  }
+}
+
+async function handleRemoveImage() {
+  if (!isEdit || !id) {
+    // Nothing was ever sent to Cloudinary for a staged-but-unsaved image —
+    // clearing local state is the whole operation.
+    setImageUrl('');
+    setPendingLocalImage(null);
+    return;
+  }
+  const previous = imageUrl;
+  setImageUrl('');
+  setUploadingImage(true);
+  try {
+    await deleteCloudinaryAsset('product-images', id);
+  } catch (err) {
+    setImageUrl(previous);
+    Alert.alert('Error', getErrorMessage(err, 'Failed to remove image. Please try again.'));
+  } finally {
+    setUploadingImage(false);
+  }
+}
 
   const handleSave = async () => {
 
@@ -147,6 +205,7 @@ export default function NewProductScreen() {
           unitPrice: parseFloat(price),
           reorderLevel: parseInt(reorderLevel, 10),
           isActive,
+          imageUrl,
         });
         detailsSaved = true;
 
@@ -161,7 +220,7 @@ export default function NewProductScreen() {
           }
         }
       } else {
-        await productService.create({
+        const created = await productService.create({
           name: name.trim(),
           sku: skuValue,
           description: description.trim(),
@@ -171,6 +230,20 @@ export default function NewProductScreen() {
           isActive,
         });
         detailsSaved = true;
+
+        // Now that the product has a real id, upload the staged image (if
+        // any) and attach it. A failure here doesn't undo the product —
+        // it just means the image can be added again from the edit screen.
+        if (pendingLocalImage) {
+          try {
+            const url = await uploadToCloudinary(
+              pendingLocalImage.uri, 'product-images', created.id, 'product.jpg',
+            );
+            await productService.update(created.id, { imageUrl: url });
+          } catch {
+            // Non-fatal — product is saved either way.
+          }
+        }
       }
 
       // Update redirects to the product's own page; create keeps going back
@@ -272,18 +345,48 @@ export default function NewProductScreen() {
           {/* ── Image upload placeholder ──────────────────────────────────────── */}
           <FieldLabel text="Product Image" />
           <TouchableOpacity
+            onPress={handlePickImage}
+            onLongPress={imageUrl ? handleRemoveImage : undefined}
+            disabled={uploadingImage}
             activeOpacity={0.75}
             style={{
               height: 140, borderRadius: 16, marginBottom: 20,
-              borderWidth: 1.5, borderColor: colors.gray, borderStyle: 'dashed',
+              borderWidth: 1.5, borderColor: colors.gray, borderStyle: imageUrl ? 'solid' : 'dashed',
               backgroundColor: colors.surface,
-              alignItems: 'center', justifyContent: 'center', gap: 8,
+              alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
             }}
           >
-            <MaterialCommunityIcons name="camera-plus-outline" size={36} color={colors.gray} />
-            <Text style={{ fontFamily: 'Inter', fontSize: 14, color: colors.onSurfaceVariant }}>
-              Tap to upload
-            </Text>
+            {imageUrl ? (
+              <View style={{ width: '100%', height: '100%' }}>
+                <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                {uploadingImage && (
+                  <View style={[
+                    StyleSheet.absoluteFill,
+                    { backgroundColor: 'rgba(255,255,255,0.6)', alignItems: 'center', justifyContent: 'center' },
+                  ]}>
+                    <ActivityIndicator color={colors.primaryContainer} size="small" />
+                  </View>
+                )}
+                <View style={{
+                  position: 'absolute', bottom: 8, right: 8,
+                  backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 8,
+                  paddingHorizontal: 8, paddingVertical: 4,
+                }}>
+                  <Text style={{ fontFamily: 'Inter', fontSize: 11, color: colors.white }}>
+                    Tap to change · Hold to remove
+                  </Text>
+                </View>
+              </View>
+            ) : uploadingImage ? (
+              <ActivityIndicator color={colors.gray} />
+            ) : (
+              <>
+                <MaterialCommunityIcons name="camera-plus-outline" size={36} color={colors.gray} />
+                <Text style={{ fontFamily: 'Inter', fontSize: 14, color: colors.onSurfaceVariant }}>
+                  Tap to upload
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
 
           {/* ── Name + SKU ───────────────────────────────────────────────────── */}
