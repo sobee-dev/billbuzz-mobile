@@ -7,7 +7,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DeductInventoryModal, DeductItem } from '../../components/DeductInventoryModal';
 import { Document, DocumentStatus, DocumentType, documentService } from '../../services/documents';
@@ -158,21 +158,28 @@ export default function DocsScreen() {
 
   const currencyCode = business?.currency ?? '';
 
+  const loadDocs = useCallback(async () => {
+    try {
+      const data = await documentService.list({ ordering: '-document_date', page: 1 });
+      const results = Array.isArray(data) ? data : data.results ?? [];
+      setDocs(results);
+    } catch {
+      setDocs([]);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      documentService.list({ ordering: '-document_date', page: 1 })
-        .then((data) => {
-          if (cancelled) return;
-          const results = Array.isArray(data) ? data : data.results ?? [];
-          setDocs(results);
-        })
-        .catch(() => {
-          if (!cancelled) setDocs([]);
-        });
-      return () => { cancelled = true; };
-    }, []),
+      loadDocs();
+    }, [loadDocs]),
   );
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadDocs();
+    setRefreshing(false);
+  }, [loadDocs]);
 
   const filtered = docs.filter(doc => {
     const matchesType   = activeType   === 'all' || doc.documentType === activeType;
@@ -275,7 +282,11 @@ export default function DocsScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 96 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 96 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primaryContainer]} tintColor={colors.primaryContainer} />}
+      >
 
         {/* ── Search bar ───────────────────────────────────────────────────── */}
         <View style={{ paddingHorizontal: 16, paddingTop: 8, marginBottom: 16 }}>

@@ -3,7 +3,7 @@ import { resolveCurrency } from '@/utils/currencySymbol';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { productService, Product as RawProduct } from '../services/products';
 import { colors } from '../styles/globals';
@@ -126,9 +126,6 @@ function ProductStockRow({ product }: { product: Product }) {
   const status   = getStatus(product);
   const style    = STATUS_STYLE[status];
   const reorderLevel = product.reorderLevel;
-  // Backend list response doesn't always include reorderLevel (unconfirmed on
-  // this endpoint) — bar still renders sensibly using quantityOnHand alone
-  // if it's missing, rather than dividing by an undefined/zero threshold.
   const maxStock = Math.max((reorderLevel ?? 0) * 4, product.quantityOnHand, 1);
   const barFill  = Math.min(1, product.quantityOnHand / maxStock);
 
@@ -137,14 +134,18 @@ function ProductStockRow({ product }: { product: Product }) {
       paddingVertical: 14, paddingHorizontal: 16,
       borderBottomWidth: 1, borderBottomColor: '#e9ecef',
     }}>
-      {/* Top row: icon / name + sku / status chip */}
+      {/* Top row: image / name + sku / status chip */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
         <View style={{
           width: 42, height: 42, borderRadius: 11,
           backgroundColor: colors.primaryContainer + '18', flexShrink: 0,
-          alignItems: 'center', justifyContent: 'center',
+          alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
         }}>
-          <MaterialCommunityIcons name="package-variant-closed" size={20} color={colors.primaryContainer} />
+          {product.imageUrl ? (
+            <Image source={{ uri: product.imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+          ) : (
+            <MaterialCommunityIcons name="package-variant-closed" size={20} color={colors.primaryContainer} />
+          )}
         </View>
 
         <View style={{ flex: 1 }}>
@@ -185,12 +186,8 @@ function ProductStockRow({ product }: { product: Product }) {
         }} />
       </View>
 
-      {/* Qty numbers — "Reserved" isn't a real field on Product, so this
-          shows what the backend actually tracks: on-hand, available to
-          sell, sold-to-date, and the reorder threshold. */}
       <View style={{ flexDirection: 'row', gap: 0 }}>
         {[
-        //   { label: 'On Hand',    value: product.quantityOnHand },
           { label: 'Available',  value: product.availableToSell },
           { label: 'Sold',       value: product.totalSold },
           { label: 'Reorder @',  value: reorderLevel != null ? reorderLevel : '—' },
@@ -220,27 +217,28 @@ export default function StockReportScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading,  setLoading]  = useState(true);
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadProducts = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    try {
+      const raw = await fetchAllProducts();
+      setProducts(raw.map(normalize));
+    } catch {
+      setProducts([]);
+      Alert.alert('Error', 'Could not load stock report.');
+    } finally {
+      if (isRefresh) setRefreshing(false); else setLoading(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      setLoading(true);
-      fetchAllProducts()
-        .then(raw => {
-          if (cancelled) return;
-          setProducts(raw.map(normalize));
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setProducts([]);
-            Alert.alert('Error', 'Could not load stock report.');
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-      return () => { cancelled = true; };
-    }, []),
+      loadProducts(false);
+    }, [loadProducts]),
   );
+
+  const handleRefresh = useCallback(() => loadProducts(true), [loadProducts]);
 
   const outCount   = products.filter(p => isOutOfStock(p)).length;
   const lowCount   = products.filter(p => !isOutOfStock(p) && p.isLowStock).length;
@@ -302,6 +300,7 @@ export default function StockReportScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 40 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primaryContainer]} tintColor={colors.primaryContainer} />}
         >
 
           <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>

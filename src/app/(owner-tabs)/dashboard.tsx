@@ -1,17 +1,16 @@
 import LoadingScreen from '@/components/LoadingScreen';
 import { useAuth } from '@/context/AuthContext';
 import { useBusiness } from '@/context/BusinessContext';
+import { productService } from '@/services/products';
+import { resolveCurrency } from '@/utils/currencySymbol';
+import { fmtDateTime } from '@/utils/formatDate';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ImageBackground, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DeductInventoryModal, DeductItem } from '../../components/DeductInventoryModal';
-
-import { productService } from '@/services/products';
-import { resolveCurrency } from '@/utils/currencySymbol';
-import { fmtDateTime } from '@/utils/formatDate';
 import { RecentDocument, SummaryData, businessService } from '../../services/business';
 import { DocumentStatus, DocumentType, documentService } from '../../services/documents';
 import { ReportsDashboard, reportService } from '../../services/reports';
@@ -23,7 +22,7 @@ import { getDisplayName } from '../../utils/displayName';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO      = require('../../../assets/images/logo.png')      as number;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const LOGO_GLOW = require('../../../assets/images/logo-glow.png') as number;
+const LOGO_GLOW = require('../../../assets/images/logo-glow.jpg') as number;
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -241,37 +240,47 @@ export default function OwnerDashboard() {
   const lowStockCount = stats?.lowStockCount ?? 0;
   const hasLowStock = !!stats && lowStockCount > 0;
   const [report, setReport] = useState<ReportsDashboard | null>(null);
-
+  const [refreshing, setRefreshing] = useState(false);
 
   // All hooks must run unconditionally, in the same order every render —
   // the businessLoading early return has to come AFTER every hook call,
   // never before one, or React's hook-order invariant breaks.
+
+
+  const loadDashboardData = useCallback(async () => {
+    try {
+      const s = await businessService.getSummaryData();
+      setStats(s);
+      setRecentDocs(s.recentDocuments?.slice(0, 4) ?? []);
+    } catch {
+      setStats(null);
+      setRecentDocs([]);
+    }
+    try {
+      const r = await reportService.getDashboard();
+      setReport(r);
+    } catch {
+      setReport(null);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      businessService.getSummaryData()
-        .then((s) => {
-          if (cancelled) return;
-          setStats(s);
-          setRecentDocs(s.recentDocuments?.slice(0, 4) ?? []);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setStats(null);
-          setRecentDocs([]);
-        });
-      reportService.getDashboard()
-        .then((r) => {
-          if (cancelled) return;
-          setReport(r);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setReport(null);
-        });
+      (async () => {
+        if (cancelled) return;
+        await loadDashboardData();
+      })();
       return () => { cancelled = true; };
-    }, []),
+    }, [loadDashboardData]),
   );
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadDashboardData();
+    setRefreshing(false);
+  }, [loadDashboardData]);
+
 
   if (businessLoading) return <LoadingScreen text="Loading business details..." />;
 
@@ -386,6 +395,14 @@ export default function OwnerDashboard() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 96 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primaryContainer]}   // Android spinner color
+              tintColor={colors.primaryContainer}  // iOS spinner color
+            />
+          }
         >
           {/* Welcome */}
           <View style={{ marginBottom: 20 }}>

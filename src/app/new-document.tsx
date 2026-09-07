@@ -1,4 +1,5 @@
 import { useBusiness } from '@/context/BusinessContext';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { Product, productService } from '@/services/products';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { getErrorMessage } from '@/utils/getErrorMessage';
@@ -7,9 +8,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -224,7 +223,8 @@ export default function NewDocumentScreen() {
 
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<LineItem[]>([]);
-
+  const keyboardHeight = useKeyboardHeight();
+  
   function handleDocTypeChange(next: DocKind) {
     setDocType(next);
     if (next === 'purchase_invoice') {
@@ -839,7 +839,7 @@ export default function NewDocumentScreen() {
         <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }}>
           <Pressable style={{ flex: 1 }} onPress={() => setModalVisible(false)} />
 
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={{ marginBottom: keyboardHeight }}>
             <View style={{
               backgroundColor: colors.white,
               borderTopLeftRadius: 24, borderTopRightRadius: 24,
@@ -905,7 +905,6 @@ export default function NewDocumentScreen() {
                     }}
                     placeholder="1.00"
                     placeholderTextColor={colors.gray}
-                    // keyboardType="decimal-pad"
                     value={formQty}
                     onChangeText={setFormQty}
                     returnKeyType="next"
@@ -963,7 +962,7 @@ export default function NewDocumentScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </KeyboardAvoidingView>
+          </View>
         </View>
       </Modal>
 

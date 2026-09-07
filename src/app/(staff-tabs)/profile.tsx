@@ -1,3 +1,4 @@
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -60,6 +61,55 @@ function SettingsCard({ children }: { children: React.ReactNode }) {
   );
 }
 
+
+function PasswordField({
+  label, value, onChangeText, placeholder, autoFocus, returnKeyType, onSubmitEditing, editable,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder: string;
+  autoFocus?: boolean;
+  returnKeyType?: 'next' | 'done';
+  onSubmitEditing?: () => void;
+  editable: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <>
+      <Text style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.7, color: colors.onSurfaceVariant, marginBottom: 8 }}>
+        {label}
+      </Text>
+      <View style={{ position: 'relative', marginBottom: 16 }}>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.gray}
+          secureTextEntry={!visible}
+          editable={editable}
+          autoFocus={autoFocus}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          style={{
+            height: 52, borderRadius: 12, borderWidth: 1.5,
+            borderColor: '#dee2e6', backgroundColor: colors.white,
+            paddingHorizontal: 14, paddingRight: 44,
+            fontFamily: 'Inter', fontSize: 15, color: colors.onSurface,
+          }}
+        />
+        <TouchableOpacity
+          onPress={() => setVisible(v => !v)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={{ position: 'absolute', right: 14, top: 0, bottom: 0, justifyContent: 'center' }}
+        >
+          <MaterialIcons name={visible ? 'visibility-off' : 'visibility'} size={20} color={colors.onSurfaceVariant} />
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+}
+
 function NavRow({
   icon, label, sub, onPress, last = false, iconBg,
 }: {
@@ -116,6 +166,7 @@ export default function StaffProfileScreen() {
   const [newPassword,    setNewPassword]    = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
+  const keyboardHeight = useKeyboardHeight();
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -332,103 +383,78 @@ export default function StaffProfileScreen() {
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
           onPress={() => setPwModalVisible(false)}
         >
-          <Pressable>
-            <View style={{
-              backgroundColor: colors.white,
-              borderTopLeftRadius: 28, borderTopRightRadius: 28,
-              paddingHorizontal: 24,
-              paddingTop: 8,
-              paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32,
-            }}>
-              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#dde1e7', alignSelf: 'center', marginBottom: 20 }} />
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <Text style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: '800', color: colors.primaryContainer }}>
-                  Change Password
-                </Text>
+          <View style={{ marginBottom: keyboardHeight }}>
+            <Pressable>
+              <View style={{
+                backgroundColor: colors.white,
+                borderTopLeftRadius: 28, borderTopRightRadius: 28,
+                paddingHorizontal: 24,
+                paddingTop: 8,
+                paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32,
+              }}>
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#dde1e7', alignSelf: 'center', marginBottom: 20 }} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                  <Text style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: '800', color: colors.primaryContainer }}>
+                    Change Password
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setPwModalVisible(false)}
+                    style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#f0f0f4', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <MaterialIcons name="close" size={16} color={colors.onSurface} />
+                  </TouchableOpacity>
+                </View>
+
+                <PasswordField
+                  label="Current Password"
+                  value={oldPassword}
+                  onChangeText={setOldPassword}
+                  placeholder="Current password"
+                  autoFocus
+                  returnKeyType="next"
+                  editable={!savingPassword}
+                />
+
+                <PasswordField
+                  label="New Password"
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="New password"
+                  returnKeyType="next"
+                  editable={!savingPassword}
+                />
+
+                <PasswordField
+                  label="Confirm New Password"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Re-enter new password"
+                  returnKeyType="done"
+                  onSubmitEditing={handleChangePassword}
+                  editable={!savingPassword}
+                />
+
                 <TouchableOpacity
-                  onPress={() => setPwModalVisible(false)}
-                  style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#f0f0f4', alignItems: 'center', justifyContent: 'center' }}
+                  onPress={handleChangePassword}
+                  disabled={savingPassword}
+                  activeOpacity={0.85}
+                  style={{
+                    height: 52, borderRadius: 14, backgroundColor: colors.primaryContainer,
+                    alignItems: 'center', justifyContent: 'center',
+                    opacity: savingPassword ? 0.7 : 1,
+                    marginTop: 4,
+                  }}
                 >
-                  <MaterialIcons name="close" size={16} color={colors.onSurface} />
+                  {savingPassword
+                    ? <ActivityIndicator color={colors.white} />
+                    : <Text style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: '700', color: colors.white }}>
+                        Update Password
+                      </Text>
+                  }
                 </TouchableOpacity>
               </View>
-
-              <Text style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.7, color: colors.onSurfaceVariant, marginBottom: 8 }}>
-                Current Password
-              </Text>
-              <TextInput
-                value={oldPassword}
-                onChangeText={setOldPassword}
-                placeholder="Current password"
-                placeholderTextColor={colors.gray}
-                secureTextEntry
-                editable={!savingPassword}
-                style={{
-                  height: 52, borderRadius: 12, borderWidth: 1.5,
-                  borderColor: '#dee2e6', backgroundColor: colors.white,
-                  paddingHorizontal: 14, fontFamily: 'Inter', fontSize: 15,
-                  color: colors.onSurface, marginBottom: 16,
-                }}
-                autoFocus
-              />
-
-              <Text style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.7, color: colors.onSurfaceVariant, marginBottom: 8 }}>
-                New Password
-              </Text>
-              <TextInput
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholder="New password"
-                placeholderTextColor={colors.gray}
-                secureTextEntry
-                editable={!savingPassword}
-                style={{
-                  height: 52, borderRadius: 12, borderWidth: 1.5,
-                  borderColor: '#dee2e6', backgroundColor: colors.white,
-                  paddingHorizontal: 14, fontFamily: 'Inter', fontSize: 15,
-                  color: colors.onSurface, marginBottom: 16,
-                }}
-              />
-
-              <Text style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.7, color: colors.onSurfaceVariant, marginBottom: 8 }}>
-                Confirm New Password
-              </Text>
-              <TextInput
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Re-enter new password"
-                placeholderTextColor={colors.gray}
-                secureTextEntry
-                editable={!savingPassword}
-                returnKeyType="done"
-                onSubmitEditing={handleChangePassword}
-                style={{
-                  height: 52, borderRadius: 12, borderWidth: 1.5,
-                  borderColor: '#dee2e6', backgroundColor: colors.white,
-                  paddingHorizontal: 14, fontFamily: 'Inter', fontSize: 15,
-                  color: colors.onSurface, marginBottom: 20,
-                }}
-              />
-
-              <TouchableOpacity
-                onPress={handleChangePassword}
-                disabled={savingPassword}
-                activeOpacity={0.85}
-                style={{
-                  height: 52, borderRadius: 14, backgroundColor: colors.primaryContainer,
-                  alignItems: 'center', justifyContent: 'center',
-                  opacity: savingPassword ? 0.7 : 1,
-                }}
-              >
-                {savingPassword
-                  ? <ActivityIndicator color={colors.white} />
-                  : <Text style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: '700', color: colors.white }}>
-                      Update Password
-                    </Text>
-                }
-              </TouchableOpacity>
-            </View>
-          </Pressable>
+            </Pressable>
+          </View>
         </Pressable>
       </Modal>
 

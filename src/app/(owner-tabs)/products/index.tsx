@@ -3,7 +3,7 @@ import { resolveCurrency } from '@/utils/currencySymbol';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Image, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { productService, Product as RawProduct } from '../../../services/products';
 import { colors } from '../../../styles/globals';
@@ -164,21 +164,28 @@ export default function ProductsScreen() {
   const { business } = useBusiness();
   const currency = business?.currency ? resolveCurrency(business.currency).symbol : '$';
 
+  const loadProducts = useCallback(async () => {
+    try {
+      const data = await productService.list();
+      const results = Array.isArray(data) ? data : data.results ?? [];
+      setProducts(results.map(normalize));
+    } catch {
+      setProducts([]);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      productService.list()
-        .then((data) => {
-          if (cancelled) return;
-          const results = Array.isArray(data) ? data : data.results ?? [];
-          setProducts(results.map(normalize));
-        })
-        .catch(() => {
-          if (!cancelled) setProducts([]);
-        });
-      return () => { cancelled = true; };
-    }, []),
+      loadProducts();
+    }, [loadProducts]),
   );
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadProducts();
+    setRefreshing(false);
+  }, [loadProducts]);
 
   const filtered = products.filter(p => {
     const matchesFilter =
@@ -212,7 +219,11 @@ export default function ProductsScreen() {
        
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 96 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 96 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primaryContainer]} tintColor={colors.primaryContainer} />}
+      >
         <View style={{ paddingHorizontal: 16, paddingTop: 8, marginBottom: 16 }}>
           <View style={{
             flexDirection: 'row', alignItems: 'center', gap: 10,

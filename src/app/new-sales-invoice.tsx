@@ -1,6 +1,7 @@
 import { useAuth } from '@/context/AuthContext';
 import { useBusiness } from '@/context/BusinessContext';
 import { DEFAULT_CURRENCY, GLOBAL_CURRENCIES } from '@/data/constants';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -338,7 +339,7 @@ export default function NewSalesInvoiceScreen() {
   const [notes, setNotes] = useState('');
   const [markAsPaid, setMarkAsPaid] = useState(false);
   const alreadyPaidRef = useRef(false); // true once we know the loaded/saved doc is already paid — disables toggling off
-
+  const keyboardHeight = useKeyboardHeight();
   // Sync the tax rate default once business data finishes loading — the
   // initial useState above may have fired before `business` was available.
   useEffect(() => {
@@ -1211,7 +1212,7 @@ export default function NewSalesInvoiceScreen() {
         <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }}>
           <Pressable style={{ flex: 1 }} onPress={() => setAddModalVisible(false)} />
 
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={{ marginBottom: keyboardHeight }}>
             <View style={{
               backgroundColor: colors.white,
               borderTopLeftRadius: 24, borderTopRightRadius: 24,
@@ -1316,10 +1317,9 @@ export default function NewSalesInvoiceScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </KeyboardAvoidingView>
+          </View>
         </View>
       </Modal>
-
       {/* ── Deduct stock modal — now opened from the success modal's "Update Inventory" ── */}
     {savedDocId && (
       <DeductInventoryModal

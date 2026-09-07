@@ -27,8 +27,9 @@ export interface GoogleAuthResult {
 
 export function useGoogleAuth() {
   const stateRef = useRef<string | null>(null);
-  console.log('BRIDGE_REDIRECT_URI:', BRIDGE_REDIRECT_URI);
+  // console.log('BRIDGE_REDIRECT_URI:', BRIDGE_REDIRECT_URI);
 //   console.log('AUTH URL:', authUrl);
+  // console.log('API URL:', process.env.EXPO_PUBLIC_API_URL);
   const signInAsync = useCallback(async (): Promise<GoogleAuthResult | null> => {
     const state = randomState();
     stateRef.current = state;

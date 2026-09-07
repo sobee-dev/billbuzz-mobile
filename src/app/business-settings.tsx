@@ -302,7 +302,7 @@ export default function BusinessSettingsScreen() {
   const [signatureType, setSignatureType] = useState<'none' | 'text' | 'image'>('none');
   const [signatureText, setSignatureText] = useState('');
   const [signatureUrl,  setSignatureUrl]  = useState('');
-
+ 
   const logo = useAssetUpload(logoUrl, setLogoUrl);
   const signature = useAssetUpload(signatureUrl, setSignatureUrl);
 
@@ -368,6 +368,10 @@ export default function BusinessSettingsScreen() {
     return () => { cancelled = true; };
   }, []);
 
+
+
+
+
   async function handlePickLogo() {
     await logo.run(
       () => pickAndUploadImage('business-logos', 'logo.jpg', setLogoUrl),
@@ -409,8 +413,7 @@ export default function BusinessSettingsScreen() {
 
   function handleSignatureTypeChange(type: 'none' | 'text' | 'image') {
     setSignatureType(type);
-    if (type !== 'image') setSignatureUrl('');
-    if (type !== 'text') setSignatureText('');
+    
   }
 
   const handleSave = async () => {
@@ -574,6 +577,7 @@ export default function BusinessSettingsScreen() {
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+        
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
         >
 

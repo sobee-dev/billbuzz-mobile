@@ -3,7 +3,7 @@ import { resolveCurrency } from '@/utils/currencySymbol';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { productService, Product as RawProduct } from '../../../services/products';
 import { colors } from '../../../styles/globals';
@@ -135,11 +135,18 @@ export default function ProductDetailScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={{
           height: 240, backgroundColor: colors.primaryContainer + '18',
-          alignItems: 'center', justifyContent: 'center',
+          alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
         }}>
-          <MaterialCommunityIcons name="package-variant-closed" size={110} color={colors.primaryContainer} />
+          {product.imageUrl ? (
+            <Image
+              source={{ uri: product.imageUrl }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+            />
+          ) : (
+            <MaterialCommunityIcons name="package-variant-closed" size={110} color={colors.primaryContainer} />
+          )}
         </View>
-
         <View style={{ padding: 16 }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
             <Text style={{

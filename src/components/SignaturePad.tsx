@@ -22,7 +22,10 @@ if (Platform.OS === 'web') {
   WebSignaturePad = require('react-signature-canvas').default;
 }
 
-export function SignaturePad({ onSave }: { onSave: (base64Png: string) => void }) {
+export function SignaturePad({ onSave,  }: { onSave: (base64Png: string) => void;
+  onBegin?: () => void;
+  onEnd?: () => void; }) {
+
   const webRef = useRef<any>(null);
   const ref = useRef<any>(null);
   const [saving, setSaving] = useState(false);
@@ -63,7 +66,12 @@ export function SignaturePad({ onSave }: { onSave: (base64Png: string) => void }
           height: 160, borderRadius: 12, borderWidth: 1.2,
           borderColor: '#d5d8e2', backgroundColor: colors.white, overflow: 'hidden',
         }}>
-          <WebSignaturePad ref={webRef} penColor="#0000FF" canvasProps={{ style: { width: '100%', height: '100%' } }} />
+          <WebSignaturePad
+            ref={webRef}
+            penColor="#0000FF"
+            canvasProps={{ style: { width: '100%', height: '100%' } }}
+            
+          />
         </View>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
           <TouchableOpacity
@@ -113,6 +121,7 @@ export function SignaturePad({ onSave }: { onSave: (base64Png: string) => void }
           ref={ref}
           onOK={handleOK}
           onEmpty={handleEmpty}
+          
           backgroundColor="transparent"
           penColor="#1a3d8f"
           // The library ships its own Clear/Save buttons inside the canvas

@@ -1,3 +1,4 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { Alert, Platform } from 'react-native';
@@ -40,15 +41,11 @@ async function prepareForUpload(
   const actions = maxDimension ? [{ resize: { width: maxDimension } }] : [];
   const result = await manipulateAsync(uri, actions, { compress: 0.8, format });
   const mimeType = format === SaveFormat.PNG ? 'image/png' : 'image/jpeg';
+
   return { uri: result.uri, mimeType };
 }
 
-/**
- * Pick an image from the library and prep it (resize/compress), without
- * uploading anywhere. Use this when you don't have a real resourceId yet
- * (e.g. a product that hasn't been saved) — stage the local uri in your
- * own state and call uploadToCloudinary once you do have an id.
- */
+
 export async function pickImage(
   onLocalPreview?: (localUri: string) => void,
 ): Promise<{ uri: string; mimeType: string } | null> {
@@ -75,6 +72,23 @@ export async function pickImage(
   return prepareForUpload(asset.uri, SaveFormat.JPEG);
 }
 
+
+async function uploadFileNative(
+  fileUri: string,
+  url: string,
+  fields: Record<string, string>,
+  mimeType: string,
+): Promise<any> {
+  const result = await FileSystem.uploadAsync(url, fileUri, {
+    httpMethod: 'POST',
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: 'file',
+    mimeType,
+    parameters: fields, // all your other form fields as strings
+  });
+  return JSON.parse(result.body);
+}
+
 export async function uploadToCloudinary(
   fileUri: string,
   folder: string,
@@ -88,35 +102,53 @@ export async function uploadToCloudinary(
   const maxDimension = format === SaveFormat.PNG ? 0 : MAX_DIMENSION;
   const prepared = await prepareForUpload(fileUri, format, maxDimension);
 
-  const form = new FormData();
+  const uploadUrl = `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`;
+
+  // These field names (api_key, public_id) are Cloudinary's own upload API
+  // contract — unrelated to Django's camelCase renderer, so they stay
+  // snake_case here even though we read sig.apiKey / sig.publicId above.
+  const fields = {
+    api_key: sig.apiKey,
+    timestamp: String(sig.timestamp),
+    signature: sig.signature,
+    public_id: sig.publicId,
+    overwrite: String(sig.overwrite),
+  };
+
+  let data: any;
+
   if (Platform.OS === 'web') {
     // RN's { uri, name, type } shape means nothing to a real browser
     // FormData — it just stringifies it to "[object Object]" and sends
     // that as the file content. On web we need an actual Blob.
     const blob = await (await fetch(prepared.uri)).blob();
+    const form = new FormData();
     form.append('file', blob, filename);
-  } else {
-    // On native, this object shape is what RN's fetch/FormData
-    // implementation specifically recognizes and streams as binary.
-    form.append('file', { uri: prepared.uri, name: filename, type: prepared.mimeType } as unknown as Blob);
-  }
-  // These field names (api_key, public_id) are Cloudinary's own upload API
-  // contract — unrelated to Django's camelCase renderer, so they stay
-  // snake_case here even though we read sig.apiKey / sig.publicId above.
-  form.append('api_key', sig.apiKey);
-  form.append('timestamp', String(sig.timestamp));
-  form.append('signature', sig.signature);
-  form.append('public_id', sig.publicId);
-  form.append('overwrite', String(sig.overwrite));
+    Object.entries(fields).forEach(([key, value]) => form.append(key, value));
 
-  let res: Response;
-  try {
-    res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, { method: 'POST', body: form });
-  } catch (err) {
-    
-    throw new Error(`Could not reach Cloudinary: ${err instanceof Error ? err.message : String(err)}`);
+    let res: Response;
+    try {
+      res = await fetch(uploadUrl, { method: 'POST', body: form });
+    } catch (err) {
+      
+      throw new Error(`Could not reach Cloudinary: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    data = await res.json();
+    // console.log('CLOUDINARY RESPONSE STATUS:', res.status);
+    // console.log('CLOUDINARY RESPONSE BODY:', JSON.stringify(data));
+  } else {
+    // Native: RN's own FormData/fetch multipart serialization is flaky
+    // (throws "Unsupported FormDataPart implementation" on some RN/Expo
+    // versions), so bypass it entirely and let Expo stream the file.
+    try {
+      data = await uploadFileNative(prepared.uri, uploadUrl, fields, prepared.mimeType);
+    } catch (err) {
+      
+      throw new Error(`Could not reach Cloudinary: ${err instanceof Error ? err.message : String(err)}`);
+    }
+   
   }
-  const data = await res.json();
+
   if (!data.secure_url) throw new Error(data.error?.message || 'Cloudinary upload failed');
   return data.secure_url as string;
 }

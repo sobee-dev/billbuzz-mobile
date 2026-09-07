@@ -215,6 +215,7 @@ export default function OnboardingStep2() {
   const [signatureType, setSignatureType] = useState<'none' | 'text' | 'image'>('none');
   const [signatureText, setSignatureText] = useState('');
   const [signatureUrl,  setSignatureUrl]  = useState('');
+  
   const [generalError,  setGeneralError]  = useState<string | null>(null);
 
   // Each owns its own uploading/error state now — no more hand-rolled
@@ -254,8 +255,9 @@ export default function OnboardingStep2() {
     return () => { cancelled = true; };
   }, []);
 
-  
+ 
 
+  
   async function handlePickLogo() {
     // pickAndUploadImage still handles the "show it right away" preview
     // internally via its onLocalPreview callback — the hook just wraps
@@ -302,8 +304,7 @@ export default function OnboardingStep2() {
 
   function handleSignatureTypeChange(type: 'none' | 'text' | 'image') {
     setSignatureType(type);
-    if (type !== 'image') setSignatureUrl('');
-    if (type !== 'text') setSignatureText('');
+    // 
   }
 
   async function handleNext() {
@@ -422,6 +423,7 @@ export default function OnboardingStep2() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 16 }}
         >
 

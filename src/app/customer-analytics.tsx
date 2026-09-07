@@ -2,8 +2,8 @@ import { useBusiness } from '@/context/BusinessContext';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CustomerAnalytics, customerService } from '../services/customers';
 import { colors } from '../styles/globals';
@@ -214,14 +214,25 @@ export default function CustomerAnalyticsScreen() {
   const [analytics, setAnalytics] = useState<CustomerAnalytics | null>(null);
   const [loading,   setLoading]   = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    customerService.fetchCustomerAnalytics()
-      .then(data => { if (!cancelled) setAnalytics(data); })
-      .catch(() => { if (!cancelled) setAnalytics(null); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadAnalytics = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    try {
+      const data = await customerService.fetchCustomerAnalytics();
+      setAnalytics(data);
+    } catch {
+      setAnalytics(null);
+    } finally {
+      if (isRefresh) setRefreshing(false); else setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadAnalytics(false);
+  }, [loadAnalytics]);
+
+  const handleRefresh = useCallback(() => loadAnalytics(true), [loadAnalytics]);
 
   if (loading) {
     return (
@@ -289,6 +300,7 @@ export default function CustomerAnalyticsScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 48 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primaryContainer]} tintColor={colors.primaryContainer} />}
       >
 
         {/* ── Stats grid ── */}

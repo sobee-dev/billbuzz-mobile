@@ -6,7 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Document, DocumentStatus, DocumentType, documentService } from '../../services/documents';
 import { colors } from '../../styles/globals';
@@ -151,22 +151,28 @@ export default function StaffDocsScreen() {
 
   const currencyCode = business?.currency ?? '';
 
+  const loadDocs = useCallback(async () => {
+    try {
+      const data = await documentService.list({ ordering: '-document_date', page: 1 });
+      const results = Array.isArray(data) ? data : data.results ?? [];
+      setDocs(results.filter(d => STAFF_DOCUMENT_TYPES.includes(d.documentType)));
+    } catch {
+      setDocs([]);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      documentService.list({ ordering: '-document_date', page: 1 })
-        .then((data) => {
-          if (cancelled) return;
-          const results = Array.isArray(data) ? data : data.results ?? [];
-          // Staff never see supplier orders on this screen, regardless of what the API returns.
-          setDocs(results.filter(d => STAFF_DOCUMENT_TYPES.includes(d.documentType)));
-        })
-        .catch(() => {
-          if (!cancelled) setDocs([]);
-        });
-      return () => { cancelled = true; };
-    }, []),
+      loadDocs();
+    }, [loadDocs]),
   );
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadDocs();
+    setRefreshing(false);
+  }, [loadDocs]);
 
   const filtered = docs.filter(doc => {
     const matchesType   = activeType   === 'all' || doc.documentType === activeType;
@@ -196,7 +202,7 @@ export default function StaffDocsScreen() {
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <Pressable
-            onPress={() => router.push('/settings')}
+            // onPress={() => router.push('')}
             style={{
               width: 34, height: 34, borderRadius: 17, overflow: 'hidden',
               borderWidth: 1.5, borderColor: colors.gray,
@@ -219,7 +225,11 @@ export default function StaffDocsScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 96 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 96 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primaryContainer]} tintColor={colors.primaryContainer} />}
+      >
 
         {/* ── Search bar ───────────────────────────────────────────────────── */}
         <View style={{ paddingHorizontal: 16, paddingTop: 8, marginBottom: 16 }}>

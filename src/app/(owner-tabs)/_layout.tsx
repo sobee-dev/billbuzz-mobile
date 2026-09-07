@@ -55,8 +55,8 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
         borderTopWidth:    1,
         borderTopColor:    '#e9ecef',
         paddingTop:        8,
-        paddingBottom:     insets.bottom + 6,
-        paddingHorizontal: 4,
+        paddingBottom:     insets.bottom + 5,
+        paddingHorizontal: 3,
       }}>
         {TABS.map((tab, index) => {
           const isMore  = tab.name === 'more';
@@ -78,11 +78,15 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
               activeOpacity={0.7}
               style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
             >
-              <View className='rounded-xl' style={{
+              <View 
+              key={focused ? 'active' : 'inactive'}
+              style={{
+                borderRadius:       12,
+                overflow:           'hidden',
                 alignItems:        'center',
                 justifyContent:    'center',
                 paddingVertical:    5,
-                paddingHorizontal: focused ? 14 : 0,
+                paddingHorizontal: focused ? 8 : 0,
                 backgroundColor:    focused ? colors.secondaryContainer : 'transparent',
               }}>
                 <MaterialIcons

@@ -1,11 +1,12 @@
 import LoadingScreen from '@/components/LoadingScreen';
 import { useAuth } from '@/context/AuthContext';
 import { useBusiness } from '@/context/BusinessContext';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Modal, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Document, DocumentStatus, documentService } from '../../services/documents';
 import { StaffDashboardData, staffService } from '../../services/staff';
@@ -95,35 +96,33 @@ export default function StaffDashboard() {
   // All hooks must run unconditionally, in the same order every render —
   // the businessLoading early return below has to come AFTER every hook
   // call, never before one, or React's hook-order invariant breaks.
+  const loadDashboardData = useCallback(async () => {
+    try {
+      const data = await staffService.getMyDashboard();
+      setDashStats(data);
+    } catch {
+      setDashStats(null);
+    }
+    try {
+      const data = await documentService.list({ ordering: '-document_date', page: 1 });
+      const results = Array.isArray(data) ? data : data.results ?? [];
+      const ownDocs = results.filter(d => STAFF_DOCUMENT_TYPES.includes(d.documentType));
+      setRecentDocs(ownDocs.slice(0, 4));
+    } catch {
+      setRecentDocs([]);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-
-      staffService.getMyDashboard()
-        .then((data) => {
-          if (cancelled) return;
-          setDashStats(data);
-        })
-        .catch(() => {
-          if (!cancelled) setDashStats(null);
-        });
-
-      documentService.list({ ordering: '-document_date', page: 1 })
-        .then((data) => {
-          if (cancelled) return;
-          const results = Array.isArray(data) ? data : data.results ?? [];
-          const ownDocs = results.filter(d => STAFF_DOCUMENT_TYPES.includes(d.documentType));
-          setRecentDocs(ownDocs.slice(0, 4));
-        })
-        .catch(() => {
-          if (!cancelled) setRecentDocs([]);
-        });
-
-      return () => { cancelled = true; };
-    }, []),
+      loadDashboardData();
+    }, [loadDashboardData]),
   );
 
+const { refreshing, handleRefresh } = usePullToRefresh(loadDashboardData);
+
   if (businessLoading) return <LoadingScreen text="Loading your dashboard..." />;
+
 
   const currencyCode = business?.currency ?? '';
   const currencySymbol = currencyCode ? resolveCurrency(currencyCode).symbol : '';
@@ -155,6 +154,7 @@ export default function StaffDashboard() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 96 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primaryContainer]} tintColor={colors.primaryContainer} />}
       >
         {/* Welcome */}
         <View style={{ marginBottom: 20 }}>

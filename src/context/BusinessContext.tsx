@@ -16,11 +16,16 @@ export const BusinessProvider = ({ children }: { children: React.ReactNode }) =>
 
   const { user } = useAuth();
 
-useEffect(() => {
-  if (user) {
-    fetchBusiness(); // Only fetch business profile once we know who the user is
-  }
-}, [user]);
+  useEffect(() => {
+    if (user) {
+      fetchBusiness(); // Only fetch business profile once we know who the user is
+    } else {
+      // No user (logged out, or session not yet restored) — nothing to fetch,
+      // and clear out any previous user's business so it can't leak across sessions.
+      setBusiness(null);
+      setIsLoading(false);
+    }
+  }, [user]);
 
   const fetchBusiness = async () => {
     try {
@@ -28,12 +33,13 @@ useEffect(() => {
       setBusiness(data);
     } catch (e) {
       console.error("Failed to load business profile", e);
+      setBusiness(null);
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => { fetchBusiness(); }, []);
+  
 
   return (
     <BusinessContext.Provider value={{ business, isLoading, refreshBusiness: fetchBusiness }}>

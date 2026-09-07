@@ -2,8 +2,11 @@ export function getErrorMessage(err: any, fallback: string): string {
   // Request never reached the server, or the server never responded —
   // distinct from a validation rejection, so don't blur the two together.
   if (!err?.response) {
+    if (err instanceof Error && err.message) return err.message;
     return 'Network error — please check your connection and try again.';
   }
+
+  
 
   const data = err.response.data;
   if (!data) return fallback;

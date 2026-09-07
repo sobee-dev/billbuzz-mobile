@@ -22,7 +22,7 @@ import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO = require('../../assets/images/logo.png') as number;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const DECO = require('../../assets/images/tutorial-web.png') as number;
+const DECO = require('../../assets/images/signup-img.jpg') as number;
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -211,12 +211,13 @@ export default function RegisterScreen() {
           </Text>
 
           {/* ── Decorative bottom image ──────────────────────────── */}
-          <Image
+          
+          {/* <Image
             source={DECO}
             className="w-full"
-            style={{ aspectRatio: 4 / 3, opacity: 0.2 }}
+            style={{ height: 140, opacity: 0.2 }}
             resizeMode="contain"
-          />
+          /> */}
 
         </ScrollView>
       </KeyboardAvoidingView>
