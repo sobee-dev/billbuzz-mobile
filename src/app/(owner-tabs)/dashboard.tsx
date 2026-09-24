@@ -1,6 +1,7 @@
 
 import LoadingScreen from '@/components/LoadingScreen';
 import { NotificationBell } from '@/components/NotificationBell';
+import { SubscriptionBillingBanner } from '@/components/SubscriptionBillingBanner';
 import { useAuth } from '@/context/AuthContext';
 import { useBusiness } from '@/context/BusinessContext';
 import { useSubscriptionContext } from '@/context/SubscriptionContext';
@@ -428,20 +429,7 @@ export default function OwnerDashboard() {
             </Text>
           </View>
 
-          {isLocked && (
-            <View style={{ backgroundColor: colors.error, borderRadius: 14, padding: 16, marginBottom: 20,
-              flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <MaterialIcons name="lock-outline" size={20} color={colors.white} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: '700', color: colors.white }}>
-                  Subscription Inactive
-                </Text>
-                <Text style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.85)' }}>
-                  Visit www.billbuzz.ng, log in to update your account
-                </Text>
-              </View>
-            </View>
-          )}
+          {isLocked && <SubscriptionBillingBanner />}
 
     
 
@@ -652,7 +640,7 @@ export default function OwnerDashboard() {
 
           onPress={() => {
               if (isLocked) {
-                Alert.alert('Subscription Inactive', 'Log in at www.billbuzz.ng to unlock the rest of the app.');
+                Alert.alert('Subscription Inactive', 'Visit app.billbuzz.ng/billing/ to unlock the rest of the app.');
                 return;
               }
               setPickerVisible(true);

@@ -11,7 +11,7 @@ const TABS = [
   { name: 'profile',   label: 'Profile',   icon: 'more-horiz'  },
 ] as const;
 
-const LOCKED_MESSAGE = "This business's subscription is inactive. Contact your business owner.";
+const LOCKED_MESSAGE = "This business's subscription is inactive. Contact your business Admin";
 
 function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
   const insets = useSafeAreaInsets();

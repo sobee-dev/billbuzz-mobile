@@ -18,10 +18,9 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      // "usesCleartextTraffic":true,
       "predictiveBackGestureEnabled": false,
       "package": "com.sobee.billbuzz",
-      "googleServicesFile": "./google-services.json" 
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -40,7 +39,6 @@
           }
         }
       ],
-
       [
         "expo-notifications",
         {
@@ -53,7 +51,17 @@
       "expo-sharing",
       "expo-web-browser",
       "expo-font",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ],
+      "./plugins/withSingleAbi"
     ],
     "experiments": {
       "typedRoutes": true,

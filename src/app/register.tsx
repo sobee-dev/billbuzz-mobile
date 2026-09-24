@@ -3,14 +3,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    ActivityIndicator, Image,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator, Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '../services/auth';
@@ -18,7 +18,7 @@ import { colors } from '../styles/globals';
 
 import { useAuth } from '@/context/AuthContext';
 import { useGoogleAuth } from '@/hooks/useGoogleAuth';
-import { posthog } from '@/lib/posthog';
+import { safeCapture, safeCaptureException, safeIdentify } from '@/lib/posthog';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO = require('../../assets/images/logo.png') as number;
@@ -55,7 +55,7 @@ export default function RegisterScreen() {
       setGoogleLoading(false);
     }
   };
-  
+
   const handleRegister = async () => {
     if (!email.trim())     { setError('Please enter your email address.'); return; }
     if (!isValidPassword)  { setError('Password must be exactly 6 digits.'); return; }
@@ -63,14 +63,20 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       const result = await authService.register({ email: email.trim(), password });
-      posthog?.identify(result.user.id, {
-        email: result.user.email,
-        role: result.user.role,
-      });
-      posthog?.capture('account_created', { auth_method: 'email' });
+      // Analytics is fire-and-forget from here on — nothing below this line
+      // can prevent navigation, even if PostHog itself is misbehaving or
+      // `result.user` doesn't come back shaped the way we expect.
+      if (result?.user?.id) {
+        safeIdentify(result.user.id, {
+          email: result.user.email,
+          role: result.user.role,
+        });
+      }
+      safeCapture('account_created', { auth_method: 'email' });
       router.replace('/(onboarding-tabs)/step-1' as never);
     } catch (err: any) {
-      posthog?.captureException(err, { flow: 'email_registration' });
+      console.log('REGISTER ERROR:', err?.message, err); // temporary — remove once root cause confirmed
+      safeCaptureException(err, { flow: 'email_registration' });
       const msg = err?.response?.data?.email?.[0]
         ?? err?.response?.data?.password?.[0]
         ?? err?.response?.data?.detail
@@ -201,11 +207,8 @@ export default function RegisterScreen() {
           </View>
 
           {/* ── Continue with Google ─────────────────────────────── */}
-          
-          
-         <GoogleButton onPress={handleGooglePress} disabled={googleLoading} />
-          
-          
+          <GoogleButton onPress={handleGooglePress} disabled={googleLoading} />
+
           {/* ── Sign in link ─────────────────────────────────────── */}
           <Text className="font-inter text-body-md text-on-surface-variant text-center mb-4">
             Already have an account?{' '}
@@ -218,7 +221,6 @@ export default function RegisterScreen() {
           </Text>
 
           {/* ── Decorative bottom image ──────────────────────────── */}
-          
           {/* <Image
             source={DECO}
             className="w-full"

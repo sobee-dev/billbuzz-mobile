@@ -9,7 +9,7 @@ import {
   setThrottledHandler,
   storage,
 } from '@/lib/axios';
-import { posthog } from '@/lib/posthog';
+import { posthog, safeCapture, safeCaptureException, safeIdentify, safeReset } from '@/lib/posthog';
 import { authService, AuthUser, LoginPayload } from '@/services/auth';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
@@ -36,7 +36,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   usePushNotifications(user?.role === 'owner');
 
   const identifyUser = (authenticatedUser: AuthUser) => {
-    posthog?.identify(authenticatedUser.id, {
+    safeIdentify(authenticatedUser.id, {
       email: authenticatedUser.email,
       first_name: authenticatedUser.firstName,
       last_name: authenticatedUser.lastName,
@@ -68,10 +68,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setUser(userData);
         }
       } catch (e) {
-        posthog?.captureException(e);
+        safeCaptureException(e);
         await clearTokens();
-      } finally {
-        setIsLoading(false);
       }
     };
     restoreSession();
@@ -132,16 +130,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const res = await authService.login(payload);
       identifyUser(res.user);
-      posthog?.capture('user_logged_in', {
-        auth_method: 'email',
-        role: res.user.role,
-      });
+      safeCapture('user_logged_in', { auth_method: 'email', role: res.user.role });
       setUser(res.user);
       return res.user;
-    } catch (error) {
-      posthog?.captureException(error, { auth_method: 'email' });
-      throw error;
-    } finally {
+      } catch (error) {
+        safeCaptureException(error, { auth_method: 'email' });
+        throw error;
+      } finally {
       setIsAuthenticating(false);
     }
   };
@@ -171,7 +166,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const logout = async () => {
     await unregisterCurrentDeviceToken();
     await authService.logout();
-    posthog?.reset();
+    safeReset();
     setUser(null);
   };
 

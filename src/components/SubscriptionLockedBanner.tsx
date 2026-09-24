@@ -20,7 +20,7 @@ export function SubscriptionLockedBanner() {
       <MaterialIcons name="lock-outline" size={18} color={colors.error} />
       <Text style={{ flex: 1, fontFamily: 'Inter', fontSize: 12, fontWeight: '600', color: colors.error }}>
         {user?.role === 'owner'
-          ? 'Your subscription needs attention. Visit billing.billbuzz.app to manage it.'
+          ? 'Your subscription needs attention. Contact support to resolve this.'
           : "This business's subscription is inactive. Contact your business owner."}
       </Text>
     </View>
