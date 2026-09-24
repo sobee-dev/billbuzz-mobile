@@ -1,19 +1,26 @@
 import { getInvoiceTemplate } from '@/components/invoice-templates';
 import { useBusiness } from '@/context/BusinessContext';
 import { MaterialIcons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
+
 import * as Print from 'expo-print';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Easing, Pressable, ScrollView, Share, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 
 import { AddToInventoryModal } from '@/components/AddToInentoryModal';
+import { getInvoiceHtml } from '@/components/invoice-templates/pdf';
+import { RequireActiveSubscription } from '@/components/RequireActiveSubscription';
 import { Document, DocumentStatus, DocumentType, documentService } from '../services/documents';
 import { colors } from '../styles/globals';
 
+// A4 page dimensions in PDF points (72dpi) — matches the reference canvas
+// width the invoice templates themselves are laid out on, so what gets
+// captured lines up 1:1 with what the PDF page actually measures.
+const A4_WIDTH_PT = 595;
+const A4_HEIGHT_PT = 842;
 
 const TYPE_LABEL: Record<DocumentType, string> = {
   sales_invoice:    'Sales Invoice',
@@ -120,7 +127,7 @@ function ShareOption({
   );
 }
 
-export default function DocDetailScreen() {
+function DocDetailScreenInner() {
   const router = useRouter();
   const { business } = useBusiness();
   const { id, docNumber } = useLocalSearchParams<{ id?: string; docNumber?: string }>();
@@ -175,20 +182,20 @@ export default function DocDetailScreen() {
   const Template = getInvoiceTemplate(business?.selectedTemplateId, doc.documentType);
 
   // ── Text share — unchanged, no file involved ──
-  const shareAsText = async () => {
-    const text = [
-      `${TYPE_LABEL[doc.documentType]} — ${doc.documentNumber}`,
-      `Client: ${doc.customerName || doc.supplierName}`,
-      `Issued: ${doc.documentDate}`,
-      `Total: ${doc.currency}${Number(doc.grandTotal).toFixed(2)}`,
-      `Status: ${doc.status.toUpperCase()}`,
-    ].join('\n');
-    try {
-      await Share.share({ title: `${TYPE_LABEL[doc.documentType]} ${doc.documentNumber}`, message: text });
-    } catch (_) {
-      // share dismissed by user — nothing to do
-    }
-  };
+  // const shareAsText = async () => {
+  //   const text = [
+  //     `${TYPE_LABEL[doc.documentType]} — ${doc.documentNumber}`,
+  //     `Client: ${doc.customerName || doc.supplierName}`,
+  //     `Issued: ${doc.documentDate}`,
+  //     `Total: ${doc.currency}${Number(doc.grandTotal).toFixed(2)}`,
+  //     `Status: ${doc.status.toUpperCase()}`,
+  //   ].join('\n');
+  //   try {
+  //     await Share.share({ title: `${TYPE_LABEL[doc.documentType]} ${doc.documentNumber}`, message: text });
+  //   } catch (_) {
+  //     // share dismissed by user — nothing to do
+  //   }
+  // };
 
   const shareAsImage = async () => {
     setSharing(true);
@@ -210,20 +217,20 @@ export default function DocDetailScreen() {
     }
   };
 
-  // ── PDF share — screenshot the Template, embed it in a single-image PDF page ──
+  // ── PDF share — screenshot the Template, embed it in a true A4 PDF page ──
+  // The captured image is placed at exactly A4_WIDTH_PT wide (the same
+  // reference width the templates lay themselves out at) so the image
+  // maps 1:1 onto the page instead of being stretched or letterboxed by
+  // whatever the OS's default page size happens to be. object-fit: contain
+  // plus a fixed-height page means a shorter receipt is centered on the
+  // page rather than stretched to fill it, and a taller one is scaled
+  // down to still fit on the single A4 page.
   const shareAsPdf = async () => {
     setSharing(true);
     try {
-      const uri = await captureRef(viewShotRef, { format: 'png', quality: 1 });
-      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-      const html = `
-        <html>
-          <body style="margin:0;padding:0;">
-            <img src="data:image/png;base64,${base64}" style="width:100%;" />
-          </body>
-        </html>
-      `;
+      const html = getInvoiceHtml(business.selectedTemplateId, doc.documentType, doc, business);
       const { uri: pdfUri } = await Print.printToFileAsync({ html });
+
       const available = await Sharing.isAvailableAsync();
       if (!available) {
         Alert.alert('Not Available', 'Sharing isn\'t available on this device.');
@@ -233,7 +240,8 @@ export default function DocDetailScreen() {
         mimeType: 'application/pdf',
         dialogTitle: `${doc.documentNumber}.pdf`,
       });
-    } catch {
+    } catch (err) {
+      console.error('PDF share failed:', err);
       Alert.alert('Error', 'Could not generate the receipt PDF.');
     } finally {
       setSharing(false);
@@ -380,7 +388,7 @@ export default function DocDetailScreen() {
             >
               <ShareOption icon="picture-as-pdf" label="PDF"   onPress={() => runShare(shareAsPdf)} />
               <ShareOption icon="image"          label="Image" onPress={() => runShare(shareAsImage)} />
-              <ShareOption icon="text-snippet"   label="Text"  onPress={() => runShare(shareAsText)} />
+           
             </Animated.View>
           )}
 
@@ -405,5 +413,14 @@ export default function DocDetailScreen() {
       />
 
     </SafeAreaView>
+  );
+}
+
+
+export default function DocDetailScreen() {
+  return (
+    <RequireActiveSubscription>
+      <DocDetailScreenInner />
+    </RequireActiveSubscription>
   );
 }

@@ -94,45 +94,47 @@ function DocCard({ doc, currency, currentUser, onPress, onLongPress }: {
       delayLongPress={400}
       activeOpacity={0.85}
       style={{
-        backgroundColor: colors.white, borderRadius: 16, padding: 16,
-        marginBottom: 12,
-        shadowColor: colors.primaryContainer, shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
+        backgroundColor: colors.white, borderRadius: 16, padding: 10,
+        marginBottom: 8, flexDirection: 'row' as const,
+        shadowColor: colors.primaryContainer, shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03, shadowRadius: 3, elevation: 0.5,
       }}
     >
-      {/* Row 1: doc number + amount */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-        <Text style={{
-          fontFamily: 'Inter', fontSize: 11, fontWeight: '700',
-          textTransform: 'uppercase', letterSpacing: 0.8,
-          color: colors.primaryContainer,
-        }}>
-          {doc.documentNumber}
-        </Text>
-        <Text style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: '800', color: colors.onSurface }}>
-          {fmtAmt(Number(doc.grandTotal), displaySymbol)}
-        </Text>
-      </View>
-
-      {/* Row 2: client name + type badge */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <Text style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: '700', color: colors.onSurface }}>
-          {clientLabel}
-        </Text>
-        <View style={{ backgroundColor: colors.primaryContainer, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 }}>
-          <Text style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: '700', textTransform: 'uppercase', color: colors.white, letterSpacing: 0.4 }}>
-            {DOCUMENT_TYPE_LABEL[doc.documentType] ?? doc.documentType}
+      <View style={{ flex: 1 }}>
+        {/* Row 1: doc number + amount */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 3 }}>
+          <Text style={{
+            fontFamily: 'Inter', fontSize: 11, fontWeight: '700',
+            textTransform: 'uppercase', letterSpacing: 0.8,
+            color: colors.primaryContainer,
+          }}>
+            {doc.documentNumber}
+          </Text>
+          <Text style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: '800', color: colors.onSurface }}>
+            {fmtAmt(Number(doc.grandTotal), displaySymbol)}
           </Text>
         </View>
-      </View>
 
-      {/* Row 3: date + status */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ fontFamily: 'Inter', fontSize: 9, color: colors.onSurfaceVariant }}>
-          {fmtDateTime(doc.documentDate)}
-          {doc.createdBy ? `  •  ${getDisplayName(doc.createdBy, currentUser)}` : ''}
-        </Text>
-        <DocChip status={doc.status} />
+        {/* Row 2: client name + type badge */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <Text style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: '700', color: colors.onSurface }}>
+            {clientLabel}
+          </Text>
+          <View style={{ backgroundColor: colors.primaryContainer, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 }}>
+            <Text style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: '700', textTransform: 'uppercase', color: colors.white, letterSpacing: 0.4 }}>
+              {DOCUMENT_TYPE_LABEL[doc.documentType] ?? doc.documentType}
+            </Text>
+          </View>
+        </View>
+
+        {/* Row 3: date + status */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ fontFamily: 'Inter', fontSize: 9, color: colors.onSurfaceVariant }}>
+            {fmtDateTime(doc.createdAt)}
+            {doc.createdBy ? `  •  ${getDisplayName(doc.createdBy, currentUser)}` : ''}
+          </Text>
+          <DocChip status={doc.status} />
+        </View>
       </View>
     </TouchableOpacity>
   );

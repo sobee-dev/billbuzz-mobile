@@ -15,6 +15,7 @@ import { DEFAULT_CURRENCY, GLOBAL_CURRENCIES } from '../data/constants';
 import { useAuth } from '@/context/AuthContext';
 import { deleteCloudinaryAsset, pickAndUploadImage, uploadToCloudinary } from '@/lib/imageUpload';
 
+import { useBusiness } from '@/context/BusinessContext';
 import { useAssetUpload } from '@/hooks/useAssetUpload';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { getErrorMessage } from '@/utils/getErrorMessage';
@@ -278,7 +279,7 @@ export default function BusinessSettingsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-   
+  const { refreshBusiness } = useBusiness();
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
   const [bizId,   setBizId]   = useState<string | null>(null);
@@ -448,6 +449,8 @@ export default function BusinessSettingsScreen() {
         signatureUrl: signatureType === 'image' ? signatureUrl : '',
       });
 
+      await refreshBusiness();
+
       setInitialState({
         name: name.trim(),
         description: description.trim(),
@@ -467,7 +470,16 @@ export default function BusinessSettingsScreen() {
         signatureUrl: signatureType === 'image' ? signatureUrl : '',
       });
 
-      Alert.alert('Settings Saved', 'Your business settings have been updated successfully.');
+      Alert.alert(
+        'Settings Saved',
+        'Your business settings have been updated successfully.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.back(),
+          },
+        ]
+      );
     } catch (err) {
       setGeneralError(getErrorMessage(err, 'Could not save settings. Please try again.'));
     } finally {

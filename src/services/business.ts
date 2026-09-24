@@ -16,7 +16,7 @@ export interface BusinessProfile {
   currency: string;
   taxRate: string;
   taxEnabled: boolean;
-  selectedTemplateId: 'modern' | 'classic' | 'minimal';
+  selectedTemplateId: 'modern' | 'classic' | 'minimal' | 'professional';
   onboardingComplete: boolean;
   motto: string;
   serverId: string | null;

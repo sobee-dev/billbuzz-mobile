@@ -2,7 +2,7 @@
 import api from '../lib/axios';
 
 export type PlanTier = 'trial' | 'basic' | 'pro';
-export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired';
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled';
 
 export interface SubscriptionInfo {
   planTier:           PlanTier;
@@ -18,4 +18,7 @@ export const billingService = {
     const { data } = await api.get<SubscriptionInfo>('/api/billing/status/');
     return data;
   },
+
+  
 };
+

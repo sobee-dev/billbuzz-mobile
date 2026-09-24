@@ -91,10 +91,10 @@ function DocCard({ doc, currency, currentUser, onPress }: {
       onPress={onPress}
       activeOpacity={0.85}
       style={{
-        backgroundColor: colors.white, borderRadius: 16, padding: 16,
-        marginBottom: 12,
+        backgroundColor: colors.white, borderRadius: 16, padding: 9,
+        marginBottom: 9,
         shadowColor: colors.primaryContainer, shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
+        shadowOpacity: 0.03, shadowRadius: 6, elevation: 0.5,
       }}
     >
       {/* Row 1: doc number + amount */}
@@ -126,7 +126,7 @@ function DocCard({ doc, currency, currentUser, onPress }: {
       {/* Row 3: date + status */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text style={{ fontFamily: 'Inter', fontSize: 9, color: colors.onSurfaceVariant }}>
-          {fmtDateTime(doc.documentDate)}
+          {fmtDateTime(doc.createdAt)}
           {doc.createdBy ? `  •  ${getDisplayName(doc.createdBy, currentUser)}` : ''}
         </Text>
         <DocChip status={doc.status} />

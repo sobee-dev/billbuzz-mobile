@@ -1,12 +1,16 @@
+
 import LoadingScreen from '@/components/LoadingScreen';
+import { NotificationBell } from '@/components/NotificationBell';
 import { useAuth } from '@/context/AuthContext';
 import { useBusiness } from '@/context/BusinessContext';
+import { useSubscriptionContext } from '@/context/SubscriptionContext';
+import { useGuardedRouter } from '@/hooks/useGuardedRouter';
 import { productService } from '@/services/products';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { fmtDateTime } from '@/utils/formatDate';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, ImageBackground, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -186,13 +190,13 @@ function StatCard({ iconName, iconBg, iconColor, currency, label, value, valueCo
       padding:         16,
       borderWidth:     t.borderWidth,
       borderColor:     t.borderColor,
-      minHeight:       160,
+      minHeight:       150,
       justifyContent:  'space-between',
       shadowColor:     colors.primaryContainer,
       shadowOffset:    { width: 0, height: 2 },
-      shadowOpacity:   0.06,
-      shadowRadius:    4,
-      elevation:       2,
+      shadowOpacity:   0.03,
+      shadowRadius:    2,
+      elevation:       0.5,
     }}>
       <View style={{
         width: 48, height: 48, borderRadius: 24,
@@ -225,7 +229,7 @@ function StatCard({ iconName, iconBg, iconColor, currency, label, value, valueCo
 export default function OwnerDashboard() {
   const { user } = useAuth();
   const { business, isLoading: businessLoading } = useBusiness();
-  const router = useRouter();
+  const router = useGuardedRouter();
   const insets = useSafeAreaInsets();
   
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -233,6 +237,8 @@ export default function OwnerDashboard() {
   const [deductItems,   setDeductItems]   = useState<DeductItem[]>([]);
   const [deductDocId,   setDeductDocId]   = useState<string | null>(null);
   const [deductLoading, setDeductLoading] = useState(false);
+  const { isLocked, subscription } = useSubscriptionContext();
+
 
   const [recentDocs, setRecentDocs] = useState<RecentDocument[]>([]);
   const [stats,      setStats]      = useState<SummaryData | null>(null);
@@ -245,6 +251,9 @@ export default function OwnerDashboard() {
   // All hooks must run unconditionally, in the same order every render —
   // the businessLoading early return has to come AFTER every hook call,
   // never before one, or React's hook-order invariant breaks.
+
+
+ 
 
 
   const loadDashboardData = useCallback(async () => {
@@ -361,6 +370,11 @@ export default function OwnerDashboard() {
           </Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          
+          
+          <NotificationBell />
+          
+          
           <Pressable
             onPress={() => router.push('/settings')}
             style={{
@@ -413,6 +427,23 @@ export default function OwnerDashboard() {
               Welcome back, {displayName}
             </Text>
           </View>
+
+          {isLocked && (
+            <View style={{ backgroundColor: colors.error, borderRadius: 14, padding: 16, marginBottom: 20,
+              flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <MaterialIcons name="lock-outline" size={20} color={colors.white} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: '700', color: colors.white }}>
+                  Subscription Inactive
+                </Text>
+                <Text style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.85)' }}>
+                  Visit www.billbuzz.ng, log in to update your account
+                </Text>
+              </View>
+            </View>
+          )}
+
+    
 
           {/* ── Stats grid 2×2 ───────────────────────────────────────────────── */}
           <View style={{ gap: 12, marginBottom: 24 }}>
@@ -472,9 +503,9 @@ export default function OwnerDashboard() {
               overflow: 'hidden',
               shadowColor: colors.primaryContainer,
               shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.06,
-              shadowRadius: 4,
-              elevation: 2,
+              shadowOpacity: 0.03,
+              shadowRadius: 2,
+              elevation: 0.5,
             }}>
               {recentDocs.length === 0 ? (
                 <View style={{ padding: 24, alignItems: 'center' }}>
@@ -522,7 +553,7 @@ export default function OwnerDashboard() {
               backgroundColor: colors.white, borderRadius: 14,
               borderWidth: 1, borderColor: '#e9ecef', overflow: 'hidden',
               shadowColor: colors.primaryContainer, shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+              shadowOpacity: 0.0, shadowRadius: 1.5, elevation: 0.5,
               marginBottom: 12,
             }}>
               <InsightRow
@@ -618,7 +649,15 @@ export default function OwnerDashboard() {
         {/* ── FAB ──────────────────────────────────────────────────────────── */}
         <TouchableOpacity
           activeOpacity={0.85}
-          onPress={() => setPickerVisible(true)}
+
+          onPress={() => {
+              if (isLocked) {
+                Alert.alert('Subscription Inactive', 'Log in at www.billbuzz.ng to unlock the rest of the app.');
+                return;
+              }
+              setPickerVisible(true);
+            }}
+
           style={{
             position:        'absolute',
             bottom:          16,

@@ -2,6 +2,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useBusiness } from '@/context/BusinessContext';
 import { DEFAULT_CURRENCY, GLOBAL_CURRENCIES } from '@/data/constants';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+import { posthog } from '@/lib/posthog';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -71,19 +72,6 @@ function resolveCurrencySelection(stored: string): { code: string; customSymbol:
   if (bySymbol) return { code: bySymbol.code, customSymbol: '', isCustom: false };
 
   return { code: DEFAULT_CURRENCY.code, customSymbol: stored, isCustom: true };
-}
-
-function buildDeductItems(savedDocItems: DocumentItem[]): DeductItem[] {
-  return savedDocItems
-    .filter(li => li.product) // only product-linked lines are trackable — matches backend's `tracked` queryset
-    .map(li => ({
-      itemId:       li.id,           // real DocumentItem.id — required by the deduct-inventory endpoint
-      productId:    li.product!,
-      name:         li.description,
-      sku:          '—',             // DocumentItem doesn't carry SKU — see note below
-      invoicedQty:  Math.round(li.quantity),
-      currentStock: 0,               // DocumentItem doesn't carry stock — see note below
-    }));
 }
 
 // ─── Module-level components (keyboard stability) ─────────────────────────────
@@ -433,14 +421,18 @@ export default function NewSalesInvoiceScreen() {
     return () => clearTimeout(handle);
   }, [pendingName, addModalVisible, pendingProductId]);
 
-  // Debounced search effect for inline line item cards
+  // Debounced search effect for inline line item cards. Keyed on the active
+  // item's name and match state only, so editing qty or price on any card no
+  // longer re-fires a product search.
+  const activeItem = items.find(i => i.id === activeSearchItemId);
+  const activeItemName = activeItem?.name ?? '';
+  const activeItemProductId = activeItem?.productId;
   useEffect(() => {
     if (!activeSearchItemId) {
       setLineItemProductResults([]);
       return;
     }
-    const activeItem = items.find(i => i.id === activeSearchItemId);
-    if (!activeItem || !activeItem.name.trim() || activeItem.productId) {
+    if (!activeItemName.trim() || activeItemProductId) {
       setLineItemProductResults([]);
       return;
     }
@@ -448,7 +440,7 @@ export default function NewSalesInvoiceScreen() {
     const handle = setTimeout(async () => {
       setLineItemSearching(true);
       try {
-        const results = await productService.search(activeItem.name.trim());
+        const results = await productService.search(activeItemName.trim());
         setLineItemProductResults(results);
       } catch {
         setLineItemProductResults([]);
@@ -458,7 +450,7 @@ export default function NewSalesInvoiceScreen() {
     }, 300);
 
     return () => clearTimeout(handle);
-  }, [activeSearchItemId, items]);
+  }, [activeSearchItemId, activeItemName, activeItemProductId]);
 
   // ── Customer search (debounced, live while typing customer name) ───────────
   useEffect(() => {
@@ -511,6 +503,7 @@ export default function NewSalesInvoiceScreen() {
   const discountAmt = parseFloat(discount) || 0;
   const grandTotal  = subtotal + taxAmount - discountAmt;
   const [deductItemsReady, setDeductItemsReady] = useState<DeductItem[]>([]);
+  const [deductLoading, setDeductLoading] = useState(false);
   // ── Handlers: customer ───────────────────────────────────────────────────────
   const handleCustomerNameChange = (val: string) => {
     setCustomerName(val);
@@ -647,55 +640,96 @@ export default function NewSalesInvoiceScreen() {
       
       if (markAsPaid && !alreadyPaidRef.current && newDocId) {
         saved = await documentService.markPaid(newDocId);
+        posthog?.capture('sales_invoice_marked_paid', {
+          item_count: items.length,
+          currency: customCurrencyMode ? customSymbol : currencyCode,
+          grand_total: grandTotal,
+        });
       }
 
+      posthog?.capture('sales_invoice_saved', {
+        operation: savedDocId ? 'updated' : 'created',
+        item_count: items.length,
+        currency: customCurrencyMode ? customSymbol : currencyCode,
+        grand_total: grandTotal,
+        status: markAsPaid || alreadyPaidRef.current ? 'paid' : 'draft',
+        has_customer_match: Boolean(customerId),
+      });
 
 
+
+      // Stock levels are deliberately NOT looked up here. Only an owner who
+      // taps "Update Inventory" needs them, so the lookup lives in
+      // handleOpenDeduct below instead of running on every save for everyone.
       setSavedItems(saved?.items ?? []);
-      const finalItems = saved?.items ?? [];
-      setSavedItems(finalItems);
+      setDeductItemsReady([]);
 
-      const trackedItems = finalItems.filter(li => li.product);
-      if (trackedItems.length > 0) {
-        const uniqueProductIds = [...new Set(trackedItems.map(li => li.product!))];
-        try {
-          const products = await Promise.all(uniqueProductIds.map(pid => productService.get(pid)));
-          const productMap = new Map(products.map(p => [p.id, p]));
-          setDeductItemsReady(buildDeductItems(finalItems, productMap));
-        } catch {
-          // Stock lookup failed — fall back to zero-stock items rather than
-          // blocking the save itself, which already succeeded.
-          setDeductItemsReady(buildDeductItems(finalItems, new Map()));
-        }
-      } else {
-        setDeductItemsReady([]);
-      }
-
-      setSavedDocId(saved?.id ?? savedDocId ?? null);
+      setSavedDocId(saved?.id ?? savedDocId);
       setSavedInvoiceNumber(saved?.documentNumber ?? invoiceNumber);
       setSuccessVisible(true);
     } catch (err: any) {
+      posthog?.captureException(err, {
+        flow: 'sales_invoice_save',
+        operation: savedDocId ? 'updated' : 'created',
+      });
       Alert.alert('Error', getErrorMessage(err, 'Could not save invoice. Please try again.'));
     } finally {
       setSaving(false);
     }
   };
 
-  function buildDeductItems(savedDocItems: DocumentItem[], productMap: Map<string, Product>): DeductItem[] {
-    return savedDocItems
-      .filter(li => li.product)
-      .map(li => {
-        const product = productMap.get(li.product!);
-        return {
-          itemId:       li.id,
-          productId:    li.product!,
-          name:         li.description,
-          sku:          product?.sku ?? '—',
-          invoicedQty:  Math.round(li.quantity),
-          currentStock: product ? Math.round(Number(product.quantityOnHand)) : 0,
-        };
+  const STOCK_LOOKUP_CHUNK = 5;
+
+  // Builds the rows for the deduct modal. Stock we already know from the
+  // screen (captured when a product was picked from search) is reused, and
+  // only the remaining products are fetched, a few at a time, so a big
+  // invoice can never fire dozens of requests in the same second.
+  async function buildDeductItems(savedDocItems: DocumentItem[]): Promise<DeductItem[]> {
+    const tracked = savedDocItems.filter(li => li.product);
+
+    const known = new Map<string, { sku: string | null; qty: number }>();
+    items.forEach(i => {
+      if (i.productId && i.qtyOnHand !== undefined) {
+        known.set(i.productId, { sku: i.sku ?? null, qty: i.qtyOnHand });
+      }
+    });
+
+    const missing = [...new Set(tracked.map(li => li.product!))].filter(pid => !known.has(pid));
+
+    for (let start = 0; start < missing.length; start += STOCK_LOOKUP_CHUNK) {
+      const chunk = missing.slice(start, start + STOCK_LOOKUP_CHUNK);
+      const settled = await Promise.allSettled(chunk.map(pid => productService.get(pid)));
+      settled.forEach(r => {
+        if (r.status === 'fulfilled') {
+          known.set(r.value.id, { sku: r.value.sku, qty: Number(r.value.quantityOnHand) });
+        }
       });
+    }
+
+    return tracked.map(li => {
+      const stock = known.get(li.product!);
+      return {
+        itemId:       li.id,
+        productId:    li.product!,
+        name:         li.description,
+        sku:          stock?.sku ?? '—',
+        invoicedQty:  Math.round(li.quantity),
+        currentStock: stock ? Math.round(stock.qty) : 0,
+      };
+    });
   }
+
+  const handleOpenDeduct = async () => {
+    if (deductLoading) return;
+    setDeductLoading(true);
+    try {
+      setDeductItemsReady(await buildDeductItems(savedItems));
+      setSuccessVisible(false);
+      setDeductVisible(true);
+    } finally {
+      setDeductLoading(false);
+    }
+  };
 
   // ── Inventory deduction — now a separate, optional step from the success modal ──
   const handleDeductApply = (deductions: { itemId: string; name: string; deductQty: number }[]) => {
@@ -1385,7 +1419,8 @@ export default function NewSalesInvoiceScreen() {
             {/* Conditionally display Update Inventory button only for owners */}
             {user?.role === 'owner' && (
               <TouchableOpacity
-                onPress={() => { setSuccessVisible(false); setDeductVisible(true); }}
+                onPress={handleOpenDeduct}
+                disabled={deductLoading}
                 activeOpacity={0.85}
                 style={{
                   width: '100%', height: 50, borderRadius: 14,
@@ -1394,16 +1429,24 @@ export default function NewSalesInvoiceScreen() {
                   marginBottom: 10,
                 }}
               >
-                <Text style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: '700', color: colors.white }}>
-                  Update Inventory
-                </Text>
+                {deductLoading
+                  ? <ActivityIndicator color={colors.white} />
+                  : <Text style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: '700', color: colors.white }}>
+                      Update Inventory
+                    </Text>
+                }
               </TouchableOpacity>
             )}
 
             <TouchableOpacity
               onPress={() => {
                 setSuccessVisible(false);
-                if (savedDocId) {
+                if (id) {
+                  // Editing an existing invoice — a doc-detail screen for it is
+                  // already on the stack underneath.
+                  router.back();
+                } else if (savedDocId) {
+                  // Brand-new invoice — no doc-detail screen exists yet for it.
                   router.replace(`/doc-detail?id=${savedDocId}` as never);
                 } else {
                   handleDashboardRedirect();

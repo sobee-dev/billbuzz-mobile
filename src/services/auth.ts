@@ -9,16 +9,25 @@ export interface AuthUser {
   email:      string;
   role:       'owner' | 'staff' ;
   firstName?:      string;
-  laststName?:      string;
+  lastName?:      string;
   avatarColor?: string;
   hasBusiness?: boolean;
   fullName?: string;
+  requiresPasswordChange?: boolean;
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+}
+
+export interface RequestDeletionResponse {
+  message: string;
+  deletionScheduledFor: string;
 }
 
 export interface AuthResponse {
   access:  string;
   refresh: string;
   user:    AuthUser;
+  requiresPasswordChange?: boolean;
 }
 
 export interface GoogleAuthResponse extends AuthResponse {
@@ -72,8 +81,28 @@ export const authService = {
   },
 
   /** Change password (requires old password) */
-  async changePassword(oldPassword: string, newPassword: string): Promise<void> {
-    await api.post('/api/users/change_password/', { oldPassword, newPassword });
+  async changePassword(oldPassword: string | undefined, newPassword: string): Promise<void> {
+    await api.post('/api/users/change_password/', {
+      oldPassword: oldPassword || undefined,
+      newPassword,
+      newPasswordConfirm: newPassword,
+    });
+  },
+
+  /** Owner or staff self-service deletion — password re-entry required */
+  async requestAccountDeletion(password: string, reason?: string): Promise<RequestDeletionResponse> {
+    const { data } = await api.post<RequestDeletionResponse>('/api/users/request_account_deletion/', {
+      password,
+      reason: reason || '',
+    });
+    return data;
+  },
+
+  /** Reactivate a pending-deletion account within its grace period */
+  async cancelAccountDeletion(email: string, password: string): Promise<AuthResponse> {
+    const { data } = await api.post<AuthResponse>('/api/users/cancel_account_deletion/', { email, password });
+    await saveTokens(data.access, data.refresh);
+    return data;
   },
 
   /** Update email/push notification preferences */
@@ -90,5 +119,9 @@ export const authService = {
   /** Trigger email verification resend */
   async verifyEmail(token: string): Promise<void> {
     await api.post('/api/users/verify_email/', { token });
+  },
+
+  async requestPasswordReset(email: string): Promise<void> {
+    await api.post('/api/users/password_reset/request/', { email });
   },
 };

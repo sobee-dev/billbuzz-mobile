@@ -1,5 +1,6 @@
 import { useBusiness } from '@/context/BusinessContext';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+import { posthog } from '@/lib/posthog';
 import { Product, productService } from '@/services/products';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { getErrorMessage } from '@/utils/getErrorMessage';
@@ -446,15 +447,36 @@ export default function NewDocumentScreen() {
     try {
       if (savedDocId) {
         const saved = await documentService.update(savedDocId, buildCommonFields());
+        posthog?.capture('document_saved', {
+          operation: 'updated',
+          document_type: docType,
+          item_count: items.length,
+          currency: currencyCode,
+          grand_total: grandTotal,
+          has_customer_match: Boolean(customerId),
+        });
         Alert.alert('Document Updated', `${saved.documentNumber ?? docNumber} has been updated successfully.`,
           [{ text: 'Done', onPress: () => router.back() }]);
       } else {
         const saved = await documentService.create({ documentType: docType, ...buildCommonFields() });
         setSavedDocId(saved.id);
+        posthog?.capture('document_saved', {
+          operation: 'created',
+          document_type: docType,
+          item_count: items.length,
+          currency: currencyCode,
+          grand_total: grandTotal,
+          has_customer_match: Boolean(customerId),
+        });
         Alert.alert('Document Created', `${saved.documentNumber ?? docNumber} has been created successfully.`,
           [{ text: 'Done', onPress: () => router.back() }]);
       }
     } catch (err) {
+      posthog?.captureException(err, {
+        flow: 'document_save',
+        document_type: docType,
+        operation: savedDocId ? 'updated' : 'created',
+      });
       Alert.alert('Error', getErrorMessage(err, 'Could not save document. Please try again.'));
     } finally {
       setSaving(false);

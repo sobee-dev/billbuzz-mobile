@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "billbuzz",
+    "name": "Billbuzz",
     "slug": "billbuzz",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -20,7 +20,8 @@
       },
       // "usesCleartextTraffic":true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.sobee.billbuzz"
+      "package": "com.sobee.billbuzz",
+      "googleServicesFile": "./google-services.json" 
     },
     "web": {
       "bundler": "metro",
@@ -37,6 +38,14 @@
             "image": "./assets/images/splash-icon.png",
             "imageWidth": 76
           }
+        }
+      ],
+
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#ffffff"
         }
       ],
       "expo-secure-store",

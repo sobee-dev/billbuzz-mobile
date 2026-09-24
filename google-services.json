@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "987376931336",
+    "project_id": "billbuzz-a743d",
+    "storage_bucket": "billbuzz-a743d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:987376931336:android:e4b035c1bbe26b59cf37bd",
+        "android_client_info": {
+          "package_name": "com.sobee.billbuzz"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCuJIOUmYLiFECqG3qQVcQEqFGPESmzNRI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -7,6 +7,7 @@ import {
   Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { posthog } from '../lib/posthog';
 import { customerService, PaymentMethodPreference } from '../services/customers';
 import { colors } from '../styles/globals';
 
@@ -229,10 +230,20 @@ export default function NewClientScreen() {
       } else {
         await customerService.create(payload);
       }
+      posthog?.capture('customer_saved', {
+        operation: isEdit ? 'updated' : 'created',
+        payment_method_preference: payPref,
+        tag_count: tags.length,
+        has_notes: notes.trim().length > 0,
+      });
       showSuccessAndRedirect(
         `${fullName.trim()} has been ${isEdit ? 'updated' : 'added'} successfully.`,
       );
-    } catch {
+    } catch (error) {
+      posthog?.captureException(error, {
+        flow: 'customer_save',
+        operation: isEdit ? 'updated' : 'created',
+      });
       Alert.alert('Error', 'Could not save customer. Please try again.');
     } finally {
       setSaving(false);

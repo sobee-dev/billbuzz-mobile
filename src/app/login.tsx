@@ -1,10 +1,10 @@
-// import AsyncStorage from '@react-native-async-storage/async-storage'; // UNCOMMENT FOR STORAGE
+// login.tsx
 import { GoogleButton } from '@/components/GoogleButton';
 import { useAuth } from '@/context/AuthContext';
 import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -18,6 +18,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AUTH_LAST_EMAIL_KEY, storage } from '../lib/axios';
 import { colors } from '../styles/globals';
 
 
@@ -56,6 +57,14 @@ export default function LoginScreen() {
 
   const shakeX = useRef(new Animated.Value(0)).current;
 
+  // Prefill the email field with whatever was used last time, so returning
+  // users only have to type their 6-digit password.
+  useEffect(() => {
+    storage.getItem(AUTH_LAST_EMAIL_KEY).then(saved => {
+      if (saved) setEmail(saved);
+    });
+  }, []);
+
   const shake = () =>
     Animated.sequence([
       Animated.timing(shakeX, { toValue:  10, duration: 50, useNativeDriver: true }),
@@ -76,6 +85,7 @@ export default function LoginScreen() {
       const result = await signInAsync();
       if (!result) return; // cancelled
       const { user } = await loginWithGoogle(result.code, result.redirectUri);
+      await storage.setItem(AUTH_LAST_EMAIL_KEY, user.email.toLowerCase());
       router.replace(user.role === 'owner' ? '/(owner-tabs)/dashboard' : '/(staff-tabs)/dashboard');
     } catch {
       setLoginError('Could not complete Google sign-in.');
@@ -96,16 +106,30 @@ export default function LoginScreen() {
     setLoginLoading(true);
 
     try {
-      const user = await login({ email: email.trim().toLowerCase(), password });
-      if (user.role === 'owner') {
-        router.replace('/(owner-tabs)/dashboard');
-      } else {
-        router.replace('/(staff-tabs)/dashboard');
+      const normalizedEmail = email.trim().toLowerCase();
+      const user = await login({ email: normalizedEmail, password });
+      await storage.setItem(AUTH_LAST_EMAIL_KEY, normalizedEmail);
+      if (user.requiresPasswordChange) {
+        router.replace('/force-password-change');
+        return;
       }
+      router.replace(user.role === 'owner' ? '/(owner-tabs)/dashboard' : '/(staff-tabs)/dashboard');
+    
     } catch (err: any) {
       if (err.message === "Network Error") {
         setLoginError("Cannot connect to server. Check your URL/Wi-Fi.");
       } else {
+        const code = err?.response?.data?.code;
+        if (code === 'pending_deletion') {
+          router.push({
+            pathname: '/reactivate-account' as never,
+            params: {
+              email: email.trim().toLowerCase(),
+              scheduledFor: err.response.data.deletionScheduledFor,
+            },
+          });
+          return;
+        }
         const msg = err?.response?.data?.detail
                 ?? err?.response?.data?.nonFieldErrors?.[0]
                 ?? err?.response?.data?.error
@@ -116,8 +140,7 @@ export default function LoginScreen() {
     } finally {
       setLoginLoading(false);
     }
-  };
-
+  }
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top', 'bottom']}>
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -195,9 +218,17 @@ export default function LoginScreen() {
           </View>
 
           {/* Forgot */}
-          <TouchableOpacity className="self-end mb-5" activeOpacity={0.7}>
+          {/* <TouchableOpacity 
+              onPress={() => router.push('/forgot-password' as never)} 
+              className="self-end mb-5" activeOpacity={0.7}>
             <Text className="font-inter text-body-md font-semibold text-primary-container">
               Forgot Password?
+            </Text>
+          </TouchableOpacity> */}
+
+          <TouchableOpacity onPress={() => router.push('/forgot-password' as never)}>
+            <Text style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: '600', color: colors.primaryContainer }}>
+              Forgot password?
             </Text>
           </TouchableOpacity>
 

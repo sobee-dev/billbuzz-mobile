@@ -1,12 +1,15 @@
 // context/AuthContext.tsx
+import { unregisterCurrentDeviceToken, usePushNotifications } from '@/hooks/usePushNotifications';
 import {
   AUTH_REFRESH_EXP_KEY,
   AUTH_REFRESH_KEY,
   AUTH_SESSION_DEADLINE_KEY,
   clearTokens,
   setSessionExpiredHandler,
+  setThrottledHandler,
   storage,
 } from '@/lib/axios';
+import { posthog } from '@/lib/posthog';
 import { authService, AuthUser, LoginPayload } from '@/services/auth';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
@@ -16,8 +19,10 @@ interface AuthContextType {
   login: (payload: LoginPayload) => Promise<AuthUser>;
   loginWithGoogle: (code: string, redirectUri: string) => Promise<{ user: AuthUser; isNew: boolean }>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   isLoading: boolean;        // ONLY: initial session restore on app boot
   isAuthenticating: boolean; // login/loginWithGoogle in flight (optional, if you want it shared)
+  throttledUntil: number | null;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -26,11 +31,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);           // boot-time only
   const [isAuthenticating, setIsAuthenticating] = useState(false); // login-action only
+  const [throttledUntil, setThrottledUntil] = useState<number | null>(null);
+
+  usePushNotifications(user?.role === 'owner');
+
+  const identifyUser = (authenticatedUser: AuthUser) => {
+    posthog?.identify(authenticatedUser.id, {
+      email: authenticatedUser.email,
+      first_name: authenticatedUser.firstName,
+      last_name: authenticatedUser.lastName,
+      role: authenticatedUser.role,
+    });
+  };
 
   useEffect(() => {
     setSessionExpiredHandler(() => setUser(null));
     return () => setSessionExpiredHandler(null);
   }, []);
+
+   // ── Throttle handler — mirrors the session-expired wiring above ──────────
+  useEffect(() => {
+    setThrottledHandler((retryAfterSeconds) => {
+      setThrottledUntil(Date.now() + retryAfterSeconds * 1000);
+    });
+    return () => setThrottledHandler(null);
+  }, []);
+
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -38,9 +64,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const refresh = await storage.getItem(AUTH_REFRESH_KEY);
         if (refresh) {
           const userData = await authService.me();
+          identifyUser(userData);
           setUser(userData);
         }
       } catch (e) {
+        posthog?.captureException(e);
         await clearTokens();
       } finally {
         setIsLoading(false);
@@ -94,12 +122,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, [user]);
 
+  const refreshUser = async () => {
+    const userData = await authService.me();
+    setUser(userData);
+  };
+
   const login = async (payload: LoginPayload): Promise<AuthUser> => {
     setIsAuthenticating(true);
     try {
       const res = await authService.login(payload);
+      identifyUser(res.user);
+      posthog?.capture('user_logged_in', {
+        auth_method: 'email',
+        role: res.user.role,
+      });
       setUser(res.user);
       return res.user;
+    } catch (error) {
+      posthog?.captureException(error, { auth_method: 'email' });
+      throw error;
     } finally {
       setIsAuthenticating(false);
     }
@@ -109,20 +150,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsAuthenticating(true);
     try {
       const res = await authService.googleLogin(code, redirectUri);
+      identifyUser(res.user);
+      posthog?.capture('user_logged_in', {
+        auth_method: 'google',
+        role: res.user.role,
+      });
+      if (res.isNew) {
+        posthog?.capture('account_created', { auth_method: 'google' });
+      }
       setUser(res.user);
       return { user: res.user, isNew: res.isNew };
+    } catch (error) {
+      posthog?.captureException(error, { auth_method: 'google' });
+      throw error;
     } finally {
       setIsAuthenticating(false);
     }
   };
 
   const logout = async () => {
+    await unregisterCurrentDeviceToken();
     await authService.logout();
+    posthog?.reset();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, loginWithGoogle, logout, isLoading, isAuthenticating }}>
+    <AuthContext.Provider value={{ user, login, loginWithGoogle, logout, refreshUser, isLoading, isAuthenticating, throttledUntil }}>
       {children}
     </AuthContext.Provider>
   );

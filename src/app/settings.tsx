@@ -1,4 +1,4 @@
-
+import { unregisterCurrentDeviceToken } from '@/hooks/usePushNotifications';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -139,8 +139,25 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [pushNotifs,  setPushNotifs]  = useState(false);
+  const [emailAlerts, setEmailAlerts] = useState(user?.emailNotifications ?? true);
+  const [pushNotifs,  setPushNotifs]  = useState(user?.pushNotifications ?? true);
+
+  // Owner-only screen — this is where the Push Notifications toggle
+  // lives, and notifications are owner-scoped end to end (backend
+  // enforces it in notify() and NotificationViewSet too; this is the
+  // UX-level mirror of that, not the real boundary).
+  useEffect(() => {
+    if (user && user.role !== 'owner') {
+      router.replace('/(staff-tabs)' as never);
+    }
+  }, [user, router]);
+
+  useEffect(() => {
+    if (user) {
+      setEmailAlerts(user.emailNotifications ?? true);
+      setPushNotifs(user.pushNotifications ?? true);
+    }
+  }, [user]);
 
   // Safe fallback data if context user is loading or empty
   const displayName = user?.fullName || 'User';
@@ -170,10 +187,6 @@ export default function SettingsScreen() {
       Alert.alert('Error', 'Could not update notification preferences.');
     }
   };
-
-  useEffect(() => {
-    
-  }, []);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
@@ -245,12 +258,6 @@ export default function SettingsScreen() {
               </Text>
             </View>
           </View>
-          {/* <TouchableOpacity
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            onPress={() => Alert.alert('Edit Profile', 'Profile editing coming soon.')}
-          >
-            <MaterialIcons name="edit" size={20} color={colors.onSurfaceVariant} />
-          </TouchableOpacity> */}
         </View>
 
         {/* Business Settings */}
@@ -309,6 +316,7 @@ export default function SettingsScreen() {
                 {
                   text: 'Logout', style: 'destructive',
                   onPress: async () => {
+                    await unregisterCurrentDeviceToken();
                     try { await authService.logout(); } catch { /* ignore */ }
                     router.replace('/login' as never);
                   },
@@ -335,10 +343,42 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </SettingsCard>
 
+                {/* Danger Zone */}
+        <SectionLabel label="Danger Zone" />
+        <SettingsCard>
+          <TouchableOpacity
+            onPress={() => router.push('/delete-account' as never)}
+            activeOpacity={0.75}
+            style={{
+              flexDirection: 'row', alignItems: 'center',
+              paddingVertical: 15, paddingHorizontal: 16,
+            }}
+          >
+            <View style={{
+              width: 36, height: 36, borderRadius: 10,
+              backgroundColor: colors.errorContainer,
+              alignItems: 'center', justifyContent: 'center', marginRight: 14,
+            }}>
+              <MaterialIcons name="delete-outline" size={20} color={colors.error} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: '700', color: colors.error }}>
+                Delete Account
+              </Text>
+              <Text style={{ fontFamily: 'Inter', fontSize: 12, color: colors.onSurfaceVariant, marginTop: 1 }}>
+                Permanently close your account and business
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+          </TouchableOpacity>
+        </SettingsCard>
+
+        
+
         {/* Footer */}
         <View style={{ alignItems: 'center', paddingVertical: 32 }}>
           <Text style={{ fontFamily: 'Inter', fontSize: 12, color: colors.onSurfaceVariant }}>
-            BillBuzz v2.4.1 (Stable Build)
+            BillBuzz v1.0 (Stable Build)
           </Text>
         </View>
       </ScrollView>

@@ -3,14 +3,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  ActivityIndicator, Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator, Image,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '../services/auth';
@@ -18,6 +18,7 @@ import { colors } from '../styles/globals';
 
 import { useAuth } from '@/context/AuthContext';
 import { useGoogleAuth } from '@/hooks/useGoogleAuth';
+import { posthog } from '@/lib/posthog';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO = require('../../assets/images/logo.png') as number;
@@ -61,9 +62,15 @@ export default function RegisterScreen() {
     setError('');
     setLoading(true);
     try {
-      await authService.register({ email: email.trim(), password });
+      const result = await authService.register({ email: email.trim(), password });
+      posthog?.identify(result.user.id, {
+        email: result.user.email,
+        role: result.user.role,
+      });
+      posthog?.capture('account_created', { auth_method: 'email' });
       router.replace('/(onboarding-tabs)/step-1' as never);
     } catch (err: any) {
+      posthog?.captureException(err, { flow: 'email_registration' });
       const msg = err?.response?.data?.email?.[0]
         ?? err?.response?.data?.password?.[0]
         ?? err?.response?.data?.detail

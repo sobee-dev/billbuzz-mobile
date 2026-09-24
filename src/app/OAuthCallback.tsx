@@ -1,10 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { authService } from '../services/auth';
-import { businessService } from '../services/business';
 import { Animated, Easing, Image, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { businessService } from '../services/business';
 import { colors } from '../styles/globals';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports

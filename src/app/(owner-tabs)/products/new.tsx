@@ -1,5 +1,6 @@
 import { useBusiness } from '@/context/BusinessContext';
 import { deleteCloudinaryAsset, pickAndUploadImage, pickImage, uploadToCloudinary } from '@/lib/imageUpload';
+import { posthog } from '@/lib/posthog';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -203,7 +204,7 @@ async function handleRemoveImage() {
           sku: skuValue,
           description: description.trim(),
           unitPrice: parseFloat(price),
-          reorderLevel: parseInt(reorderLevel, 10),
+          reorderLevel: parseInt(reorderLevel),
           isActive,
           imageUrl,
         });
@@ -215,7 +216,8 @@ async function handleRemoveImage() {
               quantityChange: qtyDelta,
               reason: adjustReason.trim(),
             });
-          } catch {
+          } catch (error) {
+            posthog?.captureException(error, { flow: 'inventory_adjustment' });
             qtyUpdated = false;
           }
         }
@@ -225,8 +227,8 @@ async function handleRemoveImage() {
           sku: skuValue,
           description: description.trim(),
           unitPrice: parseFloat(price),
-          quantityOnHand: parseInt(qty, 10),
-          reorderLevel: parseInt(reorderLevel, 10),
+          quantityOnHand: parseInt(qty, ),
+          reorderLevel: parseInt(reorderLevel, 3),
           isActive,
         });
         detailsSaved = true;
@@ -246,13 +248,21 @@ async function handleRemoveImage() {
         }
       }
 
-      // Update redirects to the product's own page; create keeps going back
-      // to the list, matching your earlier "only update" scope.
-      const redirectTarget =
-        isEdit && id
-          ? (`/(owner-tabs)/products/${id}` as never)
-          : ('/(owner-tabs)/products' as never);
+      posthog?.capture('product_saved', {
+        operation: isEdit ? 'updated' : 'created',
+        unit_price: parseFloat(price),
+        is_active: isActive,
+        has_image: Boolean(imageUrl || pendingLocalImage),
+        quantity_adjustment_succeeded: qtyChanged ? qtyUpdated : null,
+      });
+      if (qtyChanged && qtyUpdated) {
+        posthog?.capture('inventory_adjusted', {
+          quantity_change: qtyDelta,
+          adjustment_direction: qtyDelta > 0 ? 'increase' : 'decrease',
+        });
+      }
 
+      
       // Fires the redirect exactly once, whichever path triggers first —
       // a button press, the alert being dismissed with no choice (Android
       // back button, via onDismiss), or the timeout fallback if neither fires.
@@ -260,7 +270,11 @@ async function handleRemoveImage() {
       const goToTarget = () => {
         if (redirected) return;
         redirected = true;
-        router.replace(redirectTarget);
+        if (isEdit && id) {
+          router.back(); // return to the existing product detail screen underneath
+        } else {
+          router.replace('/(owner-tabs)/products' as never);
+        }
       };
       const autoRedirectTimer = setTimeout(goToTarget, 4000);
       const withAutoRedirect = (onPress?: () => void) => () => {
@@ -285,6 +299,10 @@ async function handleRemoveImage() {
         );
       }
     } catch (err: any) {
+      posthog?.captureException(err, {
+        flow: 'product_save',
+        operation: isEdit ? 'updated' : 'created',
+      });
       Alert.alert('Error', getErrorMessage(err, 'Could not save product. Please try again.'));
   } finally {
     setSaving(false);

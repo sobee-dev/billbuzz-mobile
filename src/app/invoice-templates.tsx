@@ -1,3 +1,4 @@
+import { useBusiness } from '@/context/BusinessContext';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -12,7 +13,7 @@ import { colors } from '../styles/globals';
 // until its card above is uncommented and the backend actually supports it.
 
 type TemplateId = 'classic' | 'modern' | 'minimal' | 'professional';
-type SavedTemplateId = 'modern' | 'classic' | 'minimal';
+type SavedTemplateId = 'modern' | 'classic' | 'minimal' | 'professional';
 
 interface Template {
   id:          TemplateId;
@@ -57,17 +58,17 @@ const TEMPLATES: Template[] = [
     accent:      '#555',
     preview:     { headerBg: '#f8f8fa', accentLine: '#bbb', lineColors: ['#e0e0e4', '#e8e8ec', '#f0f0f3'] },
   },
-  // {
-  //   id:          'professional',
-  //   name:        'Professional',
-  //   description: 'Two-column header with company logo placement and a footer signature line. Ideal for enterprises.',
-  //   icon:        'briefcase-outline',
-  //   tag:         'NEW',
-  //   tagColor:    '#1a5c2a',
-  //   tagBg:       '#d4edda',
-  //   accent:      '#1b5e20',
-  //   preview:     { headerBg: '#e8f5e9', accentLine: '#1b5e20', lineColors: ['#c8d8ca', '#d8e4d9', '#e4ede5'] },
-  // },
+  {
+    id:          'professional',
+    name:        'Professional',
+    description: 'Two-column header with company logo placement and a footer signature line. Ideal for enterprises.',
+    icon:        'briefcase-outline',
+    tag:         'NEW',
+    tagColor:    '#1a5c2a',
+    tagBg:       '#d4edda',
+    accent:      '#1b5e20',
+    preview:     { headerBg: '#e8f5e9', accentLine: '#1b5e20', lineColors: ['#c8d8ca', '#d8e4d9', '#e4ede5'] },
+  },
 ];
 
 // ─── Module-level components ──────────────────────────────────────────────────
@@ -210,7 +211,7 @@ function TemplateCard({
 
 export default function InvoiceTemplatesScreen() {
   const router = useRouter();
-
+  const { refreshBusiness } = useBusiness();
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
   const [bizId,    setBizId]    = useState<string | null>(null);
@@ -236,11 +237,7 @@ export default function InvoiceTemplatesScreen() {
   }, []);
 
   async function handleSave() {
-    if (selected === 'professional') {
-      // Guard against the disabled/commented-out card ever being selectable.
-      Alert.alert('Not Available', 'The Professional template is not available yet.');
-      return;
-    }
+    
     if (!bizId) {
       Alert.alert('Error', 'Your business details are still loading. Please try again in a moment.');
       return;
@@ -251,6 +248,7 @@ export default function InvoiceTemplatesScreen() {
       await businessService.updateBusiness(bizId, {
         selectedTemplateId: selected as SavedTemplateId,
       });
+      await refreshBusiness();
       Alert.alert(
         'Template Applied',
         `The "${TEMPLATES.find(t => t.id === selected)?.name}" template will be used for all new invoices.`,
@@ -339,7 +337,7 @@ export default function InvoiceTemplatesScreen() {
         ))}
 
         {/* ── Customise note ── */}
-        <View style={{
+        {/* <View style={{
           flexDirection: 'row', alignItems: 'center', gap: 10,
           paddingVertical: 14, paddingHorizontal: 14,
           backgroundColor: colors.white,
@@ -354,11 +352,11 @@ export default function InvoiceTemplatesScreen() {
             Custom colour schemes and logo placement are available in the{' '}
             <Text style={{ fontWeight: '700', color: colors.primaryContainer }}>Pro plan</Text>.
           </Text>
-        </View>
+        </View> */}
 
       </ScrollView>
 
-      {/* ── Fixed footer ── */}
+      {/* ── Footer ── */}
       <View style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         backgroundColor: colors.white,

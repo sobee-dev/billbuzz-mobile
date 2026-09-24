@@ -1,12 +1,12 @@
+import { useSubscriptionContext } from '@/context/SubscriptionContext';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRequireBusiness } from '../../hooks/useRequireBusiness';
 import { colors } from '../../styles/globals';
 
-// ─── Tab configuration ────────────────────────────────────────────────────────
 const TABS = [
   { name: 'dashboard', label: 'Dashboard', icon: 'dashboard'   },
   { name: 'docs',      label: 'Docs',      icon: 'description' },
@@ -15,40 +15,22 @@ const TABS = [
   { name: 'more',      label: 'More',      icon: 'more-horiz'  },
 ] as const;
 
-// ─── More-menu items ──────────────────────────────────────────────────────────
 const MORE_MENU_ITEMS = [
-  {
-    key:         'staff',
-    label:       'Staff',
-    description: 'Manage team members & roles',
-    icon:        'badge',
-    route:       '/staff-list',
-  },
-  {
-    key:         'analytics',
-    label:       'Analytics',
-    description: 'Business insights & reports',
-    icon:        'analytics',
-    route:       '/analytics',
-  },
-  {
-    key:         'settings',
-    label:       'Settings',
-    description: 'App & account preferences',
-    icon:        'settings',
-    route:       '/settings',
-  },
+  { key: 'staff',     label: 'Staff',     description: 'Manage team members & roles', icon: 'badge',     route: '/staff-list' },
+  { key: 'analytics', label: 'Analytics', description: 'Business insights & reports',  icon: 'analytics', route: '/analytics'  },
+  { key: 'settings',  label: 'Settings',  description: 'App & account preferences',    icon: 'settings',  route: '/settings'   },
 ] as const;
 
-// ─── Custom tab bar ───────────────────────────────────────────────────────────
+const LOCKED_MESSAGE = 'Renew your subscription to unlock the rest of the app.';
+
 function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { isLocked } = useSubscriptionContext();
   const [moreMenuVisible, setMoreMenuVisible] = useState(false);
 
   return (
     <>
-      {/* ── Bottom tab strip ── */}
       <View style={{
         flexDirection:     'row',
         backgroundColor:   colors.white,
@@ -59,8 +41,9 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
         paddingHorizontal: 3,
       }}>
         {TABS.map((tab, index) => {
-          const isMore  = tab.name === 'more';
-          const focused = isMore
+          const isMore   = tab.name === 'more';
+          const isBlocked = isLocked && tab.name !== 'dashboard';
+          const focused  = isMore
             ? moreMenuVisible
             : state.index === index && !moreMenuVisible;
 
@@ -68,6 +51,10 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
             <TouchableOpacity
               key={tab.name}
               onPress={() => {
+                if (isBlocked) {
+                  Alert.alert('Subscription Inactive', LOCKED_MESSAGE);
+                  return;
+                }
                 if (isMore) {
                   setMoreMenuVisible(true);
                 } else {
@@ -78,17 +65,18 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
               activeOpacity={0.7}
               style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
             >
-              <View 
-              key={focused ? 'active' : 'inactive'}
-              style={{
-                borderRadius:       12,
-                overflow:           'hidden',
-                alignItems:        'center',
-                justifyContent:    'center',
-                paddingVertical:    5,
-                paddingHorizontal: focused ? 8 : 0,
-                backgroundColor:    focused ? colors.secondaryContainer : 'transparent',
-              }}>
+              <View
+                key={focused ? 'active' : 'inactive'}
+                style={{
+                  borderRadius:       12,
+                  overflow:           'hidden',
+                  alignItems:        'center',
+                  justifyContent:    'center',
+                  paddingVertical:    5,
+                  paddingHorizontal: focused ? 8 : 0,
+                  backgroundColor:    focused ? colors.secondaryContainer : 'transparent',
+                  opacity: isBlocked ? 0.4 : 1,
+                }}>
                 <MaterialIcons
                   name={tab.icon as React.ComponentProps<typeof MaterialIcons>['name']}
                   size={22}
@@ -109,7 +97,8 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
         })}
       </View>
 
-      {/* ── More menu popup ── */}
+      {/* More menu — unreachable while locked since the 'more' tab itself is blocked above,
+          but guarded here too in case it's ever opened another way. */}
       <Modal
         visible={moreMenuVisible}
         transparent
@@ -120,7 +109,6 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}
           onPress={() => setMoreMenuVisible(false)}
         >
-          {/* Inner Pressable stops tap-through to overlay */}
           <Pressable>
             <View style={{
               backgroundColor:     colors.white,
@@ -128,8 +116,6 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
               borderTopRightRadius: 24,
               paddingBottom: insets.bottom > 0 ? insets.bottom + 12 : 28,
             }}>
-
-              {/* Drag handle */}
               <View style={{
                 width: 40, height: 4, borderRadius: 2,
                 backgroundColor: '#dde1e7',
@@ -137,39 +123,33 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
                 marginTop: 14, marginBottom: 4,
               }} />
 
-              {/* Title row */}
               <View style={{
                 flexDirection: 'row', alignItems: 'center',
                 justifyContent: 'space-between',
                 paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20,
               }}>
-                <Text style={{
-                  fontFamily: 'Inter', fontSize: 22, fontWeight: '800',
-                  color: colors.primaryContainer,
-                }}>
+                <Text style={{ fontFamily: 'Inter', fontSize: 22, fontWeight: '800', color: colors.primaryContainer }}>
                   More
                 </Text>
                 <TouchableOpacity
                   onPress={() => setMoreMenuVisible(false)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={{
-                    width: 32, height: 32, borderRadius: 16,
-                    backgroundColor: '#f0f0f4',
-                    alignItems: 'center', justifyContent: 'center',
-                  }}
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f0f0f4', alignItems: 'center', justifyContent: 'center' }}
                 >
                   <MaterialIcons name="close" size={18} color={colors.onSurface} />
                 </TouchableOpacity>
               </View>
 
-              {/* Menu items */}
               <View style={{ paddingHorizontal: 20, gap: 10 }}>
                 {MORE_MENU_ITEMS.map((item) => (
                   <TouchableOpacity
                     key={item.key}
                     onPress={() => {
+                      if (isLocked) {
+                        Alert.alert('Subscription Inactive', LOCKED_MESSAGE);
+                        return;
+                      }
                       setMoreMenuVisible(false);
-                      // Small delay lets the slide-down animation start before push
                       setTimeout(() => router.push(item.route as never), 180);
                     }}
                     activeOpacity={0.85}
@@ -183,42 +163,21 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
                       padding:         16,
                     }}
                   >
-                    {/* Icon badge */}
                     <View style={{
-                      width: 46, height: 46,
-                      borderRadius: 13,
+                      width: 46, height: 46, borderRadius: 13,
                       backgroundColor: colors.primaryContainer + '18',
-                      alignItems: 'center', justifyContent: 'center',
-                      marginRight: 14,
+                      alignItems: 'center', justifyContent: 'center', marginRight: 14,
                     }}>
-                      <MaterialIcons
-                        name={item.icon as React.ComponentProps<typeof MaterialIcons>['name']}
-                        size={24}
-                        color={colors.primaryContainer}
-                      />
+                      <MaterialIcons name={item.icon as React.ComponentProps<typeof MaterialIcons>['name']} size={24} color={colors.primaryContainer} />
                     </View>
-
-                    {/* Text */}
                     <View style={{ flex: 1 }}>
-                      <Text style={{
-                        fontFamily: 'Inter', fontSize: 15, fontWeight: '700',
-                        color: colors.onSurface,
-                      }}>
-                        {item.label}
-                      </Text>
-                      <Text style={{
-                        fontFamily: 'Inter', fontSize: 12,
-                        color: colors.onSurfaceVariant, marginTop: 2,
-                      }}>
-                        {item.description}
-                      </Text>
+                      <Text style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: '700', color: colors.onSurface }}>{item.label}</Text>
+                      <Text style={{ fontFamily: 'Inter', fontSize: 12, color: colors.onSurfaceVariant, marginTop: 2 }}>{item.description}</Text>
                     </View>
-
                     <MaterialIcons name="chevron-right" size={22} color={colors.onSurfaceVariant} />
                   </TouchableOpacity>
                 ))}
               </View>
-
             </View>
           </Pressable>
         </Pressable>
@@ -227,13 +186,9 @@ function CustomTabBar({ state, navigation }: { state: any; navigation: any }) {
   );
 }
 
-// ─── Layout ───────────────────────────────────────────────────────────────────
 export default function OwnerTabsLayout() {
   const checking = useRequireBusiness();
 
-  // Blocks the tab bar / screens from rendering (and firing their own
-  // getMyBusiness() calls, which would otherwise 404 in parallel) until
-  // we know whether this owner actually has a business yet.
   if (checking) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white }}>

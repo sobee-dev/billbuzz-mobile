@@ -1,8 +1,8 @@
 import { useBusiness } from '@/context/BusinessContext';
 import { resolveCurrency } from '@/utils/currencySymbol';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { productService, Product as RawProduct } from '../../../services/products';
@@ -90,13 +90,24 @@ export default function ProductDetailScreen() {
 
   const currencySymbol = business?.currency ? resolveCurrency(business.currency).symbol : '';
 
-  useEffect(() => {
-    if (!id) return;
-    productService.get(id)
-      .then(data => setProduct(normalize(data)))
-      .catch(() => setProduct(null))
-      .finally(() => setLoading(false));
-  }, [id]);
+  useFocusEffect(
+    useCallback(() => {
+
+      if (!id) return;
+    
+      setLoading(prev => (product ? false : prev));
+      if (!product) setLoading(true);
+
+      let cancelled = false;
+      productService.get(id)
+        .then(data => { if (!cancelled) setProduct(normalize(data)); })
+        .catch(() => { if (!cancelled) setProduct(null); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+
+      return () => { cancelled = true; };
+    
+    }, [id])
+  );
 
   if (loading || !product) {
     return (

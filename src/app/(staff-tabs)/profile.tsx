@@ -1,10 +1,12 @@
+import { ChangePasswordModal } from '@/components/ChangePasswordModal';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Modal, Pressable, ScrollView,
-  Text, TextInput, TouchableOpacity, View,
+    ActivityIndicator, Alert,
+    ScrollView,
+    Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authService } from '../../services/auth';
@@ -178,7 +180,7 @@ export default function StaffProfileScreen() {
       ]);
 
       const fullName = user?.fullName
-        || [user?.firstName, user?.laststName].filter(Boolean).join(' ').trim()
+        || [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
         || user?.email
         || '';
       const email = user?.email ?? '';
@@ -343,13 +345,14 @@ export default function StaffProfileScreen() {
             icon="lock-reset"
             label="Change Password"
             sub="Update your account password"
-            onPress={openPasswordModal}
+            onPress={() => setPwModalVisible(true)}
             last
           />
         </SettingsCard>
 
         {/* Logout */}
         <SectionLabel label="Session" />
+
         <SettingsCard>
           <TouchableOpacity
             onPress={handleLogout}
@@ -378,85 +381,10 @@ export default function StaffProfileScreen() {
       </ScrollView>
 
       {/* ── Change Password Modal ── */}
-      <Modal visible={pwModalVisible} transparent animationType="slide" onRequestClose={() => setPwModalVisible(false)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
-          onPress={() => setPwModalVisible(false)}
-        >
-          <View style={{ marginBottom: keyboardHeight }}>
-            <Pressable>
-              <View style={{
-                backgroundColor: colors.white,
-                borderTopLeftRadius: 28, borderTopRightRadius: 28,
-                paddingHorizontal: 24,
-                paddingTop: 8,
-                paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32,
-              }}>
-                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#dde1e7', alignSelf: 'center', marginBottom: 20 }} />
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                  <Text style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: '800', color: colors.primaryContainer }}>
-                    Change Password
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setPwModalVisible(false)}
-                    style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#f0f0f4', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <MaterialIcons name="close" size={16} color={colors.onSurface} />
-                  </TouchableOpacity>
-                </View>
-
-                <PasswordField
-                  label="Current Password"
-                  value={oldPassword}
-                  onChangeText={setOldPassword}
-                  placeholder="Current password"
-                  autoFocus
-                  returnKeyType="next"
-                  editable={!savingPassword}
-                />
-
-                <PasswordField
-                  label="New Password"
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  placeholder="New password"
-                  returnKeyType="next"
-                  editable={!savingPassword}
-                />
-
-                <PasswordField
-                  label="Confirm New Password"
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Re-enter new password"
-                  returnKeyType="done"
-                  onSubmitEditing={handleChangePassword}
-                  editable={!savingPassword}
-                />
-
-                <TouchableOpacity
-                  onPress={handleChangePassword}
-                  disabled={savingPassword}
-                  activeOpacity={0.85}
-                  style={{
-                    height: 52, borderRadius: 14, backgroundColor: colors.primaryContainer,
-                    alignItems: 'center', justifyContent: 'center',
-                    opacity: savingPassword ? 0.7 : 1,
-                    marginTop: 4,
-                  }}
-                >
-                  {savingPassword
-                    ? <ActivityIndicator color={colors.white} />
-                    : <Text style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: '700', color: colors.white }}>
-                        Update Password
-                      </Text>
-                  }
-                </TouchableOpacity>
-              </View>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+      <ChangePasswordModal 
+        visible={pwModalVisible} 
+        onClose={() => setPwModalVisible(false)} 
+      />
 
     </SafeAreaView>
   );

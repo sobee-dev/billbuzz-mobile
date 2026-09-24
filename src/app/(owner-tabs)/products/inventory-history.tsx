@@ -156,7 +156,7 @@ function TxRow({ tx }: { tx: InventoryTransaction }) {
           </Text>
           {tx.referenceDocumentId ? (
             <TouchableOpacity
-              onPress={() => router.push(`/doc-detail/${tx.referenceDocumentId}` as never)}
+              onPress={() => router.push(`/doc-detail?id=${tx.referenceDocumentId}` as never)}
               activeOpacity={0.7}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
             >

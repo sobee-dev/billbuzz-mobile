@@ -1,3 +1,4 @@
+// axios.ts — add one new exported key near your other AUTH_ constants
 import axios, { InternalAxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
 import * as SecureStore from "expo-secure-store";
@@ -26,6 +27,27 @@ export const storage = {
     }
   }
 };
+
+// ── Throttle pub/sub — same pattern as onSessionExpired above ──────────────
+type ThrottledHandler = (retryAfterSeconds: number) => void;
+let onThrottled: ThrottledHandler | null = null;
+
+export function setThrottledHandler(handler: ThrottledHandler | null) {
+  onThrottled = handler;
+}
+
+function extractRetryAfterSeconds(error: any): number {
+  // Prefer the JSON body (works once you add the custom DRF exception
+  // handler — camelCased "retryAfter" in seconds, matching your
+  // CamelCaseJSONRenderer convention). Falls back to the standard
+  // Retry-After header, which DRF sends by default either way.
+  const fromBody = error.response?.data?.retryAfter;
+  if (typeof fromBody === 'number') return fromBody;
+
+  const header = error.response?.headers?.['retry-after'];
+  const fromHeader = header ? parseInt(header, 10) : NaN;
+  return Number.isFinite(fromHeader) ? fromHeader : 60;
+}
 
 // ── Dev API URL auto-detection ──────────────────────────────────────────────
 // In dev, Metro's bundler and your backend usually run on the same machine,
@@ -58,6 +80,7 @@ export const AUTH_ACCESS_KEY = 'access_token';
 export const AUTH_REFRESH_KEY = 'refresh_token';
 export const AUTH_SESSION_DEADLINE_KEY = 'session_deadline'; // ms epoch, absolute cap
 export const AUTH_REFRESH_EXP_KEY = 'refresh_token_exp';     // ms epoch, rolling
+export const AUTH_LAST_EMAIL_KEY = 'last_used_email';        // not sensitive — just prefills the login form
 
 const MAX_SESSION_AGE_MS = 14 * 24 * 60 * 60 * 1000; // must mirror MAX_SESSION_AGE server-side
 
@@ -83,6 +106,8 @@ export const clearTokens = async () => {
   await storage.removeItem(AUTH_REFRESH_KEY);
   await storage.removeItem(AUTH_REFRESH_EXP_KEY);
   await storage.removeItem(AUTH_SESSION_DEADLINE_KEY);
+  // AUTH_LAST_EMAIL_KEY deliberately NOT cleared here — logging out
+  // shouldn't make the next person re-type an email that was just there.
 };
 
 api.interceptors.request.use(
@@ -134,6 +159,11 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    if (error.response?.status === 429) {
+      onThrottled?.(extractRetryAfterSeconds(error));
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;

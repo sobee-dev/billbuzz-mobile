@@ -3,12 +3,14 @@ import { ComponentType } from 'react';
 import { BusinessProfile } from '../../services/business';
 import { Document, DocumentType } from '../../services/documents';
 import { ClassicTemplate } from './ClassicTemplate';
+
 import { MinimalTemplate } from './MinimalTemplate';
 import { ModernTemplate } from './ModernTemplate';
+import { ProfessionalTemplate } from './ProfessionalTemplate';
 import { PurchaseOrderTemplate } from './PurchaseOrderTemplate';
 
 
-export type TemplateId = 'modern' | 'classic' | 'minimal' ;
+export type TemplateId = 'modern' | 'classic' | 'minimal' | 'professional' ;
 
 export interface ReceiptTemplateProps {
   doc: Document;
@@ -20,6 +22,7 @@ export const RECEIPT_TEMPLATES: Record<TemplateId, ComponentType<ReceiptTemplate
   modern:  ModernTemplate,
   classic: ClassicTemplate,
   minimal: MinimalTemplate,
+  professional: ProfessionalTemplate,
   
 };
 
@@ -31,5 +34,5 @@ export function getInvoiceTemplate(
     // irrespective of whatever template the business has chosen for
     // customer-facing documents.
     if (documentType === 'purchase_invoice') return PurchaseOrderTemplate;
-    return RECEIPT_TEMPLATES[id as TemplateId] ?? RECEIPT_TEMPLATES.modern;
+    return RECEIPT_TEMPLATES[id as TemplateId] ?? RECEIPT_TEMPLATES.minimal;
   }
