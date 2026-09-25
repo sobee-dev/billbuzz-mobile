@@ -39,7 +39,7 @@ export interface StaffSession {
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO = require('../../assets/images/logo.png') as number;
 
-const DECO = require('../../assets/images/login-img.jpg') as number;
+
 
 
 
@@ -275,12 +275,7 @@ export default function LoginScreen() {
             </Text>
           </Text>
 
-          {/* <Image
-            source={DECO}
-            className="w-full"
-            style={{ height: 140, opacity: 0.2 }}
-            resizeMode="contain"
-          /> */}
+          
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

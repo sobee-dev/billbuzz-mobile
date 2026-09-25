@@ -22,8 +22,7 @@ import { safeCapture, safeCaptureException, safeIdentify } from '@/lib/posthog';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO = require('../../assets/images/logo.png') as number;
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const DECO = require('../../assets/images/signup-img.jpg') as number;
+
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -220,14 +219,7 @@ export default function RegisterScreen() {
             </Text>
           </Text>
 
-          {/* ── Decorative bottom image ──────────────────────────── */}
-          {/* <Image
-            source={DECO}
-            className="w-full"
-            style={{ height: 140, opacity: 0.2 }}
-            resizeMode="contain"
-          /> */}
-
+          
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

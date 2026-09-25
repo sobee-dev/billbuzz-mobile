@@ -32,7 +32,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#FFFFFF",
           "android": {
             "image": "./assets/images/splash-icon.png",
             "imageWidth": 76
@@ -57,11 +57,16 @@
         {
           "android": {
             "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "resourceConfigurations": ["en"],
+            "extraGradleProperties": {
+              "android.enableR8.fullMode": "true"
+            }
           }
         }
       ],
-      "./plugins/withSingleAbi"
+      "./plugins/withSingleAbi",
+      "./plugins/withR8FullMode"
     ],
     "experiments": {
       "typedRoutes": true,

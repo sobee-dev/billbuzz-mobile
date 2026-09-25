@@ -9,6 +9,8 @@ import { PostHogProvider } from "posthog-react-native";
 import { useEffect, useRef } from "react";
 import "../../global.css";
 
+
+
 function RootLayoutNav() {
   const { user, isLoading: authLoading } = useAuth();
   const { business, isLoading: businessLoading } = useBusiness();

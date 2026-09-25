@@ -31,8 +31,13 @@ export const BusinessProvider = ({ children }: { children: React.ReactNode }) =>
     try {
       const data = await businessService.getMyBusiness();
       setBusiness(data);
-    } catch (e) {
-      console.error("Failed to load business profile", e);
+    } catch (e: any) {
+      const isNoBusinessYet = e?.response?.status === 404;
+      if (!isNoBusinessYet) {
+        // A genuine failure (network down, 401/403, 500, etc.) — worth surfacing.
+        console.error('Failed to load business profile', e);
+      }
+      // 404 just means this user hasn't completed onboarding yet — expected, not an error.
       setBusiness(null);
     } finally {
       setIsLoading(false);

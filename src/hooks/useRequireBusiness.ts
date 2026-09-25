@@ -1,6 +1,6 @@
+import { useBusiness } from '@/context/BusinessContext';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { businessService } from '../services/business';
+import { useEffect } from 'react';
 
 /**
  * Verifies the signed-in owner has a business record before any
@@ -11,26 +11,13 @@ import { businessService } from '../services/business';
  */
 export function useRequireBusiness() {
   const router = useRouter();
-  const [checking, setChecking] = useState(true);
+  const { business, isLoading } = useBusiness();
 
   useEffect(() => {
-    let cancelled = false;
+    if (!isLoading && !business) {
+      router.replace('/(onboarding-tabs)/step-1' as never);
+    }
+  }, [isLoading, business]);
 
-    businessService.getMyBusiness()
-      .then(() => {
-        if (!cancelled) setChecking(false);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err?.response?.status === 404) {
-          router.replace('/(onboarding-tabs)/step-1' as never);
-        } else {
-          setChecking(false);
-        }
-      });
-
-    return () => { cancelled = true; };
-  }, []);
-
-  return checking;
+  return isLoading;
 }

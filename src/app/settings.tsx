@@ -304,7 +304,7 @@ export default function SettingsScreen() {
           <NavRow
             icon="help-outline"
             label="Help & Support"
-            onPress={() => Alert.alert('Help & Support', 'Visit billbuzz.io/help for documentation and support.')}
+            onPress={() => Alert.alert('Help & Support', 'Visit www.billbuzz.ng for inquiries and support.')}
           />
           
           {/* Logout */}

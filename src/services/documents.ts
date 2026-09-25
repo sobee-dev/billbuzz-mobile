@@ -7,6 +7,7 @@ export interface DocumentItem {
   id: string;
   document: string;
   product?: string; // product UUID, null if unset or deleted (SET_NULL)
+  productImageUrl?: string | null;
   description: string;
   quantity: number;
   unitPrice: number;

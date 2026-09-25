@@ -1,11 +1,13 @@
 import { GoogleButton } from '@/components/GoogleButton';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Image, ImageBackground, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ImageBackground, Linking, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const BG_IMAGE = require('../../assets/images/splash-bg.png');
-const LOGO = require('../../assets/images/icon.png');
+const LOGO = require('../../assets/images/logo.png');
+
+const PRIVACY_POLICY_URL = 'https://billbuzz.ng/privacy-policy';
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -29,10 +31,10 @@ export default function SplashScreen() {
         </View>
 
         {/* Action Card */}
-        <View className="bg-white/10 p-6 rounded-t-3xl">
+        <View className=" p-6 rounded-t-3xl">
           <SafeAreaView edges={['bottom']}>
             <TouchableOpacity 
-              className="bg-blue-600 py-4 rounded-xl mb-4" 
+              className="bg-blue-700 py-4 rounded-xl mb-4" 
               onPress={() => router.replace('/login')}
             >
               <Text className="text-white text-center font-bold text-lg">Sign In</Text>
@@ -57,8 +59,13 @@ export default function SplashScreen() {
 
             <Text className="text-white/70 text-center text-xs mt-6">
               By continuing, you agree to BillBuzz's{' '}
-              <Text className="underline">Terms of Service</Text>
-              {'\n'}and <Text className="underline">Privacy Policy</Text>.
+              <Text className="underline" onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>
+                Terms of Service
+              </Text>
+              {'\n'}and{' '}
+              <Text className="underline" onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>
+                Privacy Policy
+              </Text>.
             </Text>
           </SafeAreaView>
         </View>

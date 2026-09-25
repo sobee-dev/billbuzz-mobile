@@ -1,3 +1,4 @@
+import { useAuth } from '@/context/AuthContext';
 import * as Notifications from 'expo-notifications';
 import { useEffect, useSyncExternalStore } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
@@ -17,7 +18,7 @@ import { notificationService } from '../services/notifications';
 //
 // A 429 pauses all fetching for a while instead of hammering a throttled API.
 
-const FALLBACK_POLL_MS = 5 * 60 * 1000;
+const FALLBACK_POLL_MS = 30 * 60 * 1000;
 const BACKOFF_MS = 15 * 60 * 1000;
 const MIN_GAP_MS = 5 * 1000;
 
@@ -116,14 +117,17 @@ export function refreshUnreadCount() {
 }
 
 export function useUnreadCount() {
+  const { user } = useAuth();
+
   useEffect(() => {
+    if (!user) return;
     consumers += 1;
     if (consumers === 1) start();
     return () => {
       consumers -= 1;
       if (consumers === 0) stop();
     };
-  }, []);
+  }, [user]);
 
   const value = useSyncExternalStore(subscribe, () => count, () => 0);
   return { count: value, refresh: refreshUnreadCount };

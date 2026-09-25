@@ -59,21 +59,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 
   useEffect(() => {
-    const restoreSession = async () => {
-      try {
-        const refresh = await storage.getItem(AUTH_REFRESH_KEY);
-        if (refresh) {
-          const userData = await authService.me();
-          identifyUser(userData);
-          setUser(userData);
-        }
-      } catch (e) {
-        safeCaptureException(e);
-        await clearTokens();
+  const restoreSession = async () => {
+    try {
+      const refresh = await storage.getItem(AUTH_REFRESH_KEY);
+      if (refresh) {
+        const userData = await authService.me();
+        identifyUser(userData);
+        setUser(userData);
       }
-    };
-    restoreSession();
-  }, []);
+    } catch (e) {
+      safeCaptureException(e);
+      await clearTokens();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  restoreSession();
+}, []);
 
   // ── Proactive expiry timer: logs out the instant the refresh token or
   // the 14-day session ceiling (whichever is sooner) is reached, without
