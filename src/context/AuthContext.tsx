@@ -9,7 +9,7 @@ import {
   setThrottledHandler,
   storage,
 } from '@/lib/axios';
-import { posthog, safeCapture, safeCaptureException, safeIdentify, safeReset } from '@/lib/posthog';
+import { safeCapture, safeCaptureException, safeIdentify, safeReset } from '@/lib/posthog';
 import { authService, AuthUser, LoginPayload } from '@/services/auth';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
@@ -17,7 +17,8 @@ import { AppState } from 'react-native';
 interface AuthContextType {
   user: AuthUser | null;
   login: (payload: LoginPayload) => Promise<AuthUser>;
-  loginWithGoogle: (code: string, redirectUri: string) => Promise<{ user: AuthUser; isNew: boolean }>;
+  register: (payload: LoginPayload) => Promise<AuthUser>;
+  loginWithGoogle: (idToken: string) => Promise<{ user: AuthUser; isNew: boolean }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   isLoading: boolean;        // ONLY: initial session restore on app boot
@@ -59,23 +60,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 
   useEffect(() => {
-  const restoreSession = async () => {
-    try {
-      const refresh = await storage.getItem(AUTH_REFRESH_KEY);
-      if (refresh) {
-        const userData = await authService.me();
-        identifyUser(userData);
-        setUser(userData);
+    const restoreSession = async () => {
+      try {
+        const refresh = await storage.getItem(AUTH_REFRESH_KEY);
+        if (refresh) {
+          const userData = await authService.me();
+          identifyUser(userData);
+          setUser(userData);
+        }
+      } catch (e) {
+        safeCaptureException(e);
+        await clearTokens();
+      } finally {
+        setIsLoading(false);
       }
-    } catch (e) {
-      safeCaptureException(e);
-      await clearTokens();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  restoreSession();
-}, []);
+    };
+    restoreSession();
+  }, []);
 
   // ── Proactive expiry timer: logs out the instant the refresh token or
   // the 14-day session ceiling (whichever is sooner) is reached, without
@@ -143,22 +144,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const loginWithGoogle = async (code: string, redirectUri: string) => {
+  const register = async (payload: LoginPayload): Promise<AuthUser> => {
     setIsAuthenticating(true);
     try {
-      const res = await authService.googleLogin(code, redirectUri);
+      const res = await authService.register(payload);
       identifyUser(res.user);
-      posthog?.capture('user_logged_in', {
-        auth_method: 'google',
-        role: res.user.role,
-      });
+      safeCapture('account_created', { auth_method: 'email' });
+      setUser(res.user);
+      return res.user;
+    } catch (error) {
+      safeCaptureException(error, { auth_method: 'email' });
+      throw error;
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const loginWithGoogle = async (idToken: string) => {
+    setIsAuthenticating(true);
+    try {
+      const res = await authService.googleLogin(idToken);
+      identifyUser(res.user);
+      safeCapture('user_logged_in', { auth_method: 'google', role: res.user.role });
       if (res.isNew) {
-        posthog?.capture('account_created', { auth_method: 'google' });
+        safeCapture('account_created', { auth_method: 'google' });
       }
       setUser(res.user);
       return { user: res.user, isNew: res.isNew };
     } catch (error) {
-      posthog?.captureException(error, { auth_method: 'google' });
+      safeCaptureException(error, { auth_method: 'google' });
       throw error;
     } finally {
       setIsAuthenticating(false);
@@ -173,7 +187,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, loginWithGoogle, logout, refreshUser, isLoading, isAuthenticating, throttledUntil }}>
+    <AuthContext.Provider value={{ user, register, login, loginWithGoogle, logout, refreshUser, isLoading, isAuthenticating, throttledUntil }}>
       {children}
     </AuthContext.Provider>
   );

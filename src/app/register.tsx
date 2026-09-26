@@ -13,12 +13,11 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { authService } from '../services/auth';
 import { colors } from '../styles/globals';
 
 import { useAuth } from '@/context/AuthContext';
 import { useGoogleAuth } from '@/hooks/useGoogleAuth';
-import { safeCapture, safeCaptureException, safeIdentify } from '@/lib/posthog';
+import { safeCaptureException } from '@/lib/posthog';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO = require('../../assets/images/logo.png') as number;
@@ -26,7 +25,7 @@ const LOGO = require('../../assets/images/logo.png') as number;
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { loginWithGoogle } = useAuth();
+  const { loginWithGoogle, register } = useAuth();
   const { signInAsync } = useGoogleAuth();
   const [googleLoading, setGoogleLoading] = useState(false);
   const [email,        setEmail]        = useState('');
@@ -46,7 +45,7 @@ export default function RegisterScreen() {
     try {
       const result = await signInAsync();
       if (!result) return;
-      const { isNew } = await loginWithGoogle(result.code, result.redirectUri);
+      const { isNew } = await loginWithGoogle(result.idToken);
       router.replace(isNew ? '/(onboarding-tabs)/step-1' as never : '/(owner-tabs)/dashboard' as never);
     } catch {
       setError('Could not complete Google sign-up.');
@@ -61,17 +60,8 @@ export default function RegisterScreen() {
     setError('');
     setLoading(true);
     try {
-      const result = await authService.register({ email: email.trim(), password });
-      // Analytics is fire-and-forget from here on — nothing below this line
-      // can prevent navigation, even if PostHog itself is misbehaving or
-      // `result.user` doesn't come back shaped the way we expect.
-      if (result?.user?.id) {
-        safeIdentify(result.user.id, {
-          email: result.user.email,
-          role: result.user.role,
-        });
-      }
-      safeCapture('account_created', { auth_method: 'email' });
+         await register({ email: email.trim().toLowerCase(), password });
+    
       router.replace('/(onboarding-tabs)/step-1' as never);
     } catch (err: any) {
       console.log('REGISTER ERROR:', err?.message, err); // temporary — remove once root cause confirmed

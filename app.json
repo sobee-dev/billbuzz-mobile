@@ -8,7 +8,15 @@
     "scheme": "billbuzz",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.sobee.billbuzz",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["com.googleusercontent.apps.771098738694-kdsj3ouhk783uc4tbvvf44tjk0u580l6"]
+          }
+        ]
+      }
     },
     "android": {
       "softwareKeyboardLayoutMode": "pan",
@@ -29,6 +37,7 @@
     },
     "plugins": [
       "expo-router",
+      "@react-native-google-signin/google-signin",
       [
         "expo-splash-screen",
         {

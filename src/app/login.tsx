@@ -84,7 +84,7 @@ export default function LoginScreen() {
     try {
       const result = await signInAsync();
       if (!result) return; // cancelled
-      const { user } = await loginWithGoogle(result.code, result.redirectUri);
+      const { user } = await loginWithGoogle(result.idToken);
       await storage.setItem(AUTH_LAST_EMAIL_KEY, user.email.toLowerCase());
       router.replace(user.role === 'owner' ? '/(owner-tabs)/dashboard' : '/(staff-tabs)/dashboard');
     } catch {

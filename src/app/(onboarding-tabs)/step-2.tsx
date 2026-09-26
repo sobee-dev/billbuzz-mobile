@@ -323,7 +323,7 @@ export default function OnboardingStep2() {
       await businessService.updateBusiness(business.id, {
         currency: currency.code,
         taxEnabled: chargeTax,
-        taxRate: chargeTax ? taxRate : '',
+        taxRate: chargeTax ? taxRate : '0',
         registrationNumber: regNumber,
         brandColorOne: brandColor,
         logoUrl,

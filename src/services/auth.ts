@@ -53,11 +53,8 @@ export const authService = {
     return data;
   },
 
-  async googleLogin(code: string, redirectUri: string): Promise<GoogleAuthResponse> {
-    const { data } = await api.post<GoogleAuthResponse>('/api/users/google_callback/', {
-      code,
-      redirect_uri: redirectUri,
-    });
+  async googleLogin(idToken: string): Promise<GoogleAuthResponse> {
+    const { data } = await api.post<GoogleAuthResponse>('/api/users/google_login/', { idToken });
     await saveTokens(data.access, data.refresh);
     return data;
   },

@@ -1,3 +1,4 @@
+import { useBusiness } from '@/context/BusinessContext';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -283,6 +284,7 @@ function getMissingFields(biz: BusinessProfile): string[] {
 export default function OnboardingStep3() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { refreshBusiness } = useBusiness();
 
   const [selected, setSelected] = useState<string>('modern');
   const [finishing, setFinishing] = useState(false);
@@ -297,13 +299,14 @@ export default function OnboardingStep3() {
 
       const missing = getMissingFields(updated);
       if (missing.length === 0) {
-        await businessService.completeOnboarding(updated.id);
+        await businessService.completeOnboarding(biz.id);
       } else {
         Alert.alert(
           'A few details are still missing',
           `You can finish these later from Settings: ${missing.join(', ')}.`,
         );
       }
+      await refreshBusiness();
     } catch (err) {
       Alert.alert(
         'Setup incomplete',
@@ -315,7 +318,8 @@ export default function OnboardingStep3() {
     }
   }
 
-  function handleSkip() {
+  async function handleSkip() {
+    await refreshBusiness();
     router.replace('/(owner-tabs)/dashboard' as never);
   }
 
